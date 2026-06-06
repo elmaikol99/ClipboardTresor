@@ -130,7 +130,9 @@ final class KeyboardViewController: UIInputViewController {
     private func startRefreshingFavorites() {
         refreshTimer?.invalidate()
         let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.reloadFavorites()
+            DispatchQueue.main.async {
+                self?.reloadFavorites()
+            }
         }
         refreshTimer = timer
         RunLoop.main.add(timer, forMode: .common)
@@ -177,7 +179,25 @@ final class KeyboardViewController: UIInputViewController {
 
     @objc private func openApp() {
         guard let url = URL(string: "clipboardtresor://") else { return }
-        extensionContext?.open(url)
+        extensionContext?.open(url, completionHandler: { [weak self] didOpen in
+            guard !didOpen else { return }
+            DispatchQueue.main.async {
+                self?.openAppThroughResponderChain(url)
+            }
+        })
+    }
+
+    private func openAppThroughResponderChain(_ url: URL) {
+        let selector = NSSelectorFromString("openURL:")
+        var responder: UIResponder? = self
+
+        while let currentResponder = responder {
+            if currentResponder.responds(to: selector) {
+                currentResponder.perform(selector, with: url)
+                return
+            }
+            responder = currentResponder.next
+        }
     }
 
     @objc private func nextKeyboardTapped() {
