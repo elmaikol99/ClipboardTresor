@@ -12,6 +12,7 @@
 		6A1E48A0BF0843AA6A91088E /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AABBAF720E0D2B764A6ACAC /* ShareViewController.swift */; };
 		A801A2EC43DDE00AA79EACED /* ClipboardCore in Frameworks */ = {isa = PBXBuildFile; productRef = E231C991187E56943D596809 /* ClipboardCore */; };
 		C1622CD81CBB04481409980F /* ClipboardShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 567B9294A2A5AE19C1A06F6D /* ClipboardShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		DDE047344028943ED228E0E0 /* KeyboardKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4DF53A2AAD06A5D34D41FACD /* KeyboardKit */; };
 		F156DB4A4AF3652AEBEF223D /* ClipboardKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DB2BE9B068BF47921883CB58 /* ClipboardKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		FD3D3A6372676A1CE81A1065 /* ClipboardCore in Frameworks */ = {isa = PBXBuildFile; productRef = 57AEC336B36065DBA5460483 /* ClipboardCore */; };
 		FF2DC0D481C3A07C19C205C2 /* ClipboardCore in Frameworks */ = {isa = PBXBuildFile; productRef = 957B83CC5A63507A562A7A7F /* ClipboardCore */; };
@@ -71,6 +72,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FD3D3A6372676A1CE81A1065 /* ClipboardCore in Frameworks */,
+				DDE047344028943ED228E0E0 /* KeyboardKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -213,6 +215,7 @@
 			name = ClipboardTresor;
 			packageProductDependencies = (
 				57AEC336B36065DBA5460483 /* ClipboardCore */,
+				4DF53A2AAD06A5D34D41FACD /* KeyboardKit */,
 			);
 			productName = ClipboardTresor;
 			productReference = 578A471FDA42C911886BFEEF /* ClipboardTresor.app */;
@@ -251,6 +254,7 @@
 			mainGroup = 71CD2C324ECBDD8A4352D4EB;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				2A08DB398D99BACA0E65525F /* XCRemoteSwiftPackageReference "KeyboardKit" */,
 				CF089A97D8F96E29D3130C3A /* XCLocalSwiftPackageReference "Shared/ClipboardCore" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -589,7 +593,23 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		2A08DB398D99BACA0E65525F /* XCRemoteSwiftPackageReference "KeyboardKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/KeyboardKit/KeyboardKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 10.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		4DF53A2AAD06A5D34D41FACD /* KeyboardKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2A08DB398D99BACA0E65525F /* XCRemoteSwiftPackageReference "KeyboardKit" */;
+			productName = KeyboardKit;
+		};
 		57AEC336B36065DBA5460483 /* ClipboardCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ClipboardCore;

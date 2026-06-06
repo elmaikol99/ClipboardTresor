@@ -8,6 +8,9 @@ options:
 packages:
   ClipboardCore:
     path: Shared/ClipboardCore
+  KeyboardKit:
+    url: https://github.com/KeyboardKit/KeyboardKit.git
+    from: 10.5.1
 
 settings:
   base:
@@ -25,6 +28,7 @@ targets:
       - path: iOS/ClipboardTresorApp
     dependencies:
       - package: ClipboardCore
+      - package: KeyboardKit
       - target: ClipboardKeyboard
         embed: true
       - target: ClipboardShareExtension
