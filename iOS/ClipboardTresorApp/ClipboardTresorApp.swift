@@ -23,6 +23,7 @@ struct ClipboardTresorApp: App {
                     )
                 )
             )
+            .preferredColorScheme(.dark)
         }
     }
 }
@@ -335,24 +336,16 @@ struct ArchiveListView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            ZStack {
+                AppTheme.background.ignoresSafeArea()
+
                 if viewModel.isUnlocked {
                     archiveContent
                 } else {
                     lockedContent
                 }
             }
-            .navigationTitle("ClipboardTresor")
-            .toolbar {
-                if viewModel.isUnlocked {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button(action: { viewModel.importCurrentClipboard() }) {
-                            Image(systemName: "plus")
-                        }
-                        .accessibilityLabel("Zwischenablage speichern")
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
         }
         .onAppear {
             viewModel.refreshFromArchive()
@@ -371,14 +364,17 @@ struct ArchiveListView: View {
 
     private var archiveContent: some View {
         VStack(spacing: 0) {
+            topBar
+
             Picker("", selection: $viewModel.selectedScope) {
                 ForEach(HistoryScope.allCases) { scope in
                     Text(scope.title).tag(scope)
                 }
             }
             .pickerStyle(.segmented)
-            .padding(.horizontal)
-            .padding(.top, 8)
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
 
             List {
                 ForEach(viewModel.filteredEntries) { entry in
@@ -389,22 +385,62 @@ struct ArchiveListView: View {
                     } onDelete: {
                         viewModel.delete(entry)
                     }
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .searchable(text: $viewModel.searchText)
 
-            Text(viewModel.statusText)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
+            statusBar
+        }
+        .background(AppTheme.background)
+    }
+
+    private var topBar: some View {
+        HStack {
+            AppLogo(size: 34)
+
+            Spacer()
+
+            GlassIconButton(systemName: "plus", accessibilityLabel: "Zwischenablage speichern") {
+                viewModel.importCurrentClipboard()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AppTheme.stroke)
+                .frame(height: 1)
         }
     }
 
+    private var statusBar: some View {
+        Text(viewModel.statusText)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(AppTheme.stroke)
+                    .frame(height: 1)
+            }
+    }
+
     private var lockedContent: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 18) {
+            AppLogo(size: 44)
             Image(systemName: "lock.fill")
-                .font(.system(size: 44, weight: .medium))
+                .font(.system(size: 36, weight: .medium))
                 .foregroundStyle(.secondary)
             Text("Archiv gesperrt")
                 .font(.title3.weight(.semibold))
@@ -414,7 +450,14 @@ struct ArchiveListView: View {
             Button("Entsperren", action: viewModel.authenticate)
                 .buttonStyle(.borderedProminent)
         }
-        .padding()
+        .padding(24)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(AppTheme.stroke)
+        }
+        .padding(24)
     }
 }
 
@@ -428,8 +471,11 @@ struct ArchiveRow: View {
         Button(action: onCopy) {
             HStack(spacing: 12) {
                 Image(systemName: entry.displayLabel == "Bild" ? "photo" : "text.alignleft")
-                    .frame(width: 34, height: 34)
+                    .font(.system(size: 17, weight: .medium))
+                    .frame(width: 38, height: 38)
                     .foregroundStyle(.secondary)
+                    .background(.regularMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
@@ -450,14 +496,74 @@ struct ArchiveRow: View {
                 Button(action: onFavorite) {
                     Image(systemName: entry.isFavorite == true ? "star.fill" : "star")
                         .foregroundStyle(entry.isFavorite == true ? .yellow : .secondary)
+                        .frame(width: 34, height: 34)
                 }
                 .buttonStyle(.plain)
             }
+            .padding(12)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(AppTheme.stroke)
+            }
         }
+        .buttonStyle(.plain)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive, action: onDelete) {
                 Label("Löschen", systemImage: "trash")
             }
         }
+    }
+}
+
+private enum AppTheme {
+    static let background = LinearGradient(
+        colors: [
+            Color(red: 0.07, green: 0.075, blue: 0.08),
+            Color(red: 0.12, green: 0.125, blue: 0.13)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    static let stroke = Color.white.opacity(0.08)
+}
+
+private struct AppLogo: View {
+    let size: CGFloat
+
+    var body: some View {
+        Image(systemName: "doc.on.clipboard")
+            .font(.system(size: size * 0.56, weight: .regular))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(.regularMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                    .stroke(AppTheme.stroke)
+            }
+    }
+}
+
+private struct GlassIconButton: View {
+    let systemName: String
+    let accessibilityLabel: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(.regularMaterial)
+                .clipShape(Circle())
+                .overlay {
+                    Circle().stroke(AppTheme.stroke)
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 }
