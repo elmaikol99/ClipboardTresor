@@ -82,6 +82,22 @@ swift build --package-path Shared/ClipboardCore
 
 To build the iOS app itself, install Xcode, create the iOS app and extension targets, add `Shared/ClipboardCore` as a local Swift package dependency, and enable the App Group listed in [iOS/README.md](iOS/README.md).
 
+The repo now includes an XcodeGen manifest and generated Xcode project:
+
+```bash
+brew install xcodegen
+xcodegen generate
+open ClipboardTresor.xcodeproj
+```
+
+Build the iOS simulator app from Terminal:
+
+```bash
+./build-ios.sh
+```
+
+The simulator build disables code signing. For a real device, configure your Apple Development Team and the App Group entitlement in Xcode.
+
 ## Build
 
 ```bash

@@ -1,0 +1,80 @@
+name: ClipboardTresor
+
+options:
+  bundleIdPrefix: local.clipboardtresor
+  deploymentTarget:
+    iOS: "17.0"
+
+packages:
+  ClipboardCore:
+    path: Shared/ClipboardCore
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  ClipboardTresor:
+    type: application
+    platform: iOS
+    sources:
+      - path: iOS/ClipboardTresorApp
+    dependencies:
+      - package: ClipboardCore
+      - target: ClipboardKeyboard
+        embed: true
+      - target: ClipboardShareExtension
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.clipboardtresor.app
+        PRODUCT_NAME: ClipboardTresor
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: ClipboardTresor
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        CODE_SIGN_ENTITLEMENTS: iOS/ClipboardTresorApp/ClipboardTresor.entitlements
+
+  ClipboardKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: iOS/ClipboardKeyboard
+    dependencies:
+      - package: ClipboardCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.clipboardtresor.app.keyboard
+        PRODUCT_NAME: ClipboardKeyboard
+        INFOPLIST_FILE: iOS/ClipboardKeyboard/Info.plist
+        CODE_SIGN_ENTITLEMENTS: iOS/ClipboardKeyboard/ClipboardKeyboard.entitlements
+        APPLICATION_EXTENSION_API_ONLY: YES
+
+  ClipboardShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: iOS/ClipboardShareExtension
+    dependencies:
+      - package: ClipboardCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.clipboardtresor.app.share
+        PRODUCT_NAME: ClipboardShareExtension
+        INFOPLIST_FILE: iOS/ClipboardShareExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: iOS/ClipboardShareExtension/ClipboardShareExtension.entitlements
+        APPLICATION_EXTENSION_API_ONLY: YES
+
+schemes:
+  ClipboardTresor:
+    build:
+      targets:
+        ClipboardTresor: all
+        ClipboardKeyboard: all
+        ClipboardShareExtension: all
+    run:
+      config: Debug
