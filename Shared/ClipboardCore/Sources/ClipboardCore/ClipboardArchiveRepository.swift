@@ -4,6 +4,23 @@ public enum ClipboardArchiveError: Error, Sendable {
     case entryNotFound
 }
 
+public struct ArchiveDiagnostics: Equatable, Sendable {
+    public let rootExists: Bool
+    public let indexExists: Bool
+    public let canReadIndex: Bool
+    public let canDecodeIndex: Bool
+    public let decodedEntryCount: Int
+    public let errorDescription: String?
+
+    public var summary: String {
+        if !rootExists { return "Ordner fehlt" }
+        if !indexExists { return "Index fehlt" }
+        if !canReadIndex { return "Index nicht lesbar" }
+        if !canDecodeIndex { return "Index nicht dekodierbar" }
+        return "\(decodedEntryCount) Einträge"
+    }
+}
+
 public final class ClipboardArchiveRepository: @unchecked Sendable {
     public private(set) var entries: [ClipEntry] = []
 
@@ -115,6 +132,58 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
         }
         entries.removeAll { $0.id == entry.id }
         saveIndex()
+    }
+
+    public func diagnostics() -> ArchiveDiagnostics {
+        let rootExists = FileManager.default.fileExists(atPath: rootURL.path)
+        let indexExists = FileManager.default.fileExists(atPath: indexURL.path)
+        guard indexExists else {
+            return ArchiveDiagnostics(
+                rootExists: rootExists,
+                indexExists: false,
+                canReadIndex: false,
+                canDecodeIndex: false,
+                decodedEntryCount: 0,
+                errorDescription: nil
+            )
+        }
+
+        let data: Data
+        do {
+            data = try storage.readData(from: indexURL)
+        } catch {
+            return ArchiveDiagnostics(
+                rootExists: rootExists,
+                indexExists: true,
+                canReadIndex: false,
+                canDecodeIndex: false,
+                decodedEntryCount: 0,
+                errorDescription: String(describing: error)
+            )
+        }
+
+        do {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let decoded = try decoder.decode([ClipEntry].self, from: data)
+            return ArchiveDiagnostics(
+                rootExists: rootExists,
+                indexExists: true,
+                canReadIndex: true,
+                canDecodeIndex: true,
+                decodedEntryCount: decoded.count,
+                errorDescription: nil
+            )
+        } catch {
+            return ArchiveDiagnostics(
+                rootExists: rootExists,
+                indexExists: true,
+                canReadIndex: true,
+                canDecodeIndex: false,
+                decodedEntryCount: 0,
+                errorDescription: String(describing: error)
+            )
+        }
     }
 
     public func favoriteSyncPayload() -> Data? {

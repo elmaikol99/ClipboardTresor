@@ -93,6 +93,7 @@ private struct ClipboardFavoritesToolbar: View {
 
     @State private var favorites: [ClipEntry] = []
     @State private var entryCount = 0
+    @State private var diagnosticsSummary = "Archiv nicht lesbar"
     @State private var syncClient: KeyboardFavoriteSyncClient?
 
     var body: some View {
@@ -158,8 +159,10 @@ private struct ClipboardFavoritesToolbar: View {
         guard let repository else {
             favorites = []
             entryCount = 0
+            diagnosticsSummary = "Repository fehlt"
             return
         }
+        diagnosticsSummary = repository.diagnostics().summary
         let entries = repository.reload()
         entryCount = entries.count
         let reloaded = Array(entries.filter { $0.isFavorite == true }.prefix(20))
@@ -173,7 +176,7 @@ private struct ClipboardFavoritesToolbar: View {
             return "Full Access aus"
         }
         if entryCount == 0 {
-            return "Archiv nicht lesbar"
+            return diagnosticsSummary
         }
         return "0/\(entryCount) Favoriten"
     }
