@@ -56,9 +56,18 @@ final class ArchiveListViewModel: ObservableObject {
                 self?.isUnlocked = success
                 self?.statusText = success ? "Archiv entsperrt" : (error?.localizedDescription ?? "Archiv gesperrt")
                 if success {
+                    self?.refreshFromArchive()
                     self?.importCurrentClipboardIfChanged()
                 }
             }
+        }
+    }
+
+    func refreshFromArchive() {
+        guard isUnlocked else { return }
+        let reloaded = repository.reload()
+        if reloaded != entries {
+            entries = reloaded
         }
     }
 
@@ -184,6 +193,7 @@ enum HistoryScope: String, CaseIterable, Identifiable {
 struct ArchiveListView: View {
     @ObservedObject var viewModel: ArchiveListViewModel
     @Environment(\.scenePhase) private var scenePhase
+    private let archiveRefreshTimer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
 
     var body: some View {
         NavigationStack {
@@ -207,12 +217,17 @@ struct ArchiveListView: View {
             }
         }
         .onAppear {
+            viewModel.refreshFromArchive()
             viewModel.importCurrentClipboardIfChanged()
         }
         .onChange(of: scenePhase) { _, newValue in
             if newValue == .active {
+                viewModel.refreshFromArchive()
                 viewModel.importCurrentClipboardIfChanged()
             }
+        }
+        .onReceive(archiveRefreshTimer) { _ in
+            viewModel.refreshFromArchive()
         }
     }
 

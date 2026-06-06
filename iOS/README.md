@@ -25,6 +25,7 @@ The Keyboard extension needs `RequestsOpenAccess = YES` in its `Info.plist` if i
 ## MVP Behavior
 
 - The iOS app shows the encrypted archive, supports search and favorites, and imports changed clipboard content after the archive is unlocked and the app opens or returns to the foreground.
+- While unlocked, the iOS app refreshes the archive list every second so entries synced from the Mac appear without closing and reopening the app.
 - The Share extension stores text, URLs, and image data from other apps.
 - The Keyboard extension shows a compact horizontal favorites bar and inserts text favorites directly.
 - Image favorites from the Keyboard are copied to `UIPasteboard.general`; the user then pastes manually.
