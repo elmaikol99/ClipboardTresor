@@ -34,7 +34,7 @@ H9YGR79DYW.local.clipboardtresor.shared
 - While unlocked, the iOS app refreshes the archive list every second so entries synced from the Mac appear without closing and reopening the app.
 - The Share extension stores text, URLs, and image data from other apps.
 - Favorites are stored on the archive entries, so Mac, iOS, and Keyboard see the same favorite state when they use the synced archive.
-- The Keyboard extension shows a compact horizontal favorites bar, refreshes it while open, inserts text favorites directly, and has an app button that opens ClipboardTresor through `clipboardtresor://`.
+- The Keyboard extension shows a horizontal favorites bar, refreshes it while open, inserts text favorites directly, includes a basic QWERTZ typing keyboard, and has an app button that opens ClipboardTresor through `clipboardtresor://`.
 - Image favorites from the Keyboard are copied to `UIPasteboard.general`; the user then pastes manually.
 
 ## Enable Keyboard on iPhone
@@ -56,7 +56,7 @@ Full Access is required so the Keyboard extension can read the shared encrypted 
 ## Important iOS limits
 
 - iOS does not allow macOS-style global background clipboard monitoring.
-- iOS does not allow a third-party app to add a bar above Apple's standard keyboard. The ClipboardTresor keyboard is therefore a compact custom keyboard made only of the favorites bar.
+- iOS does not allow a third-party app to add a bar above Apple's standard keyboard or embed Apple's keyboard. The ClipboardTresor keyboard therefore includes its own basic QWERTZ keyboard below the favorites bar.
 - ClipboardTresor can import copied content when the iOS app becomes active, but it cannot observe every copy while it is fully in the background.
 - iOS can show a paste privacy prompt when ClipboardTresor reads clipboard content from another app. To reduce repeated prompts, set `Settings > Apps > ClipboardTresor > Paste from Other Apps > Allow` when available.
 - Custom keyboards cannot type into secure text fields.

@@ -16,9 +16,12 @@ final class KeyboardViewController: UIInputViewController {
     private let barView = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
     private let favoriteScrollView = UIScrollView()
     private let favoriteStack = UIStackView()
+    private let typingStack = UIStackView()
     private var appLinkHostingController: UIHostingController<KeyboardAppLinkView>?
     private var refreshTimer: Timer?
     private var lastFavoriteSignature: String?
+    private var letterButtons: [UIButton] = []
+    private var isShifted = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -38,7 +41,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func configureLayout() {
-        view.backgroundColor = .clear
+        view.backgroundColor = .systemGray5
 
         barView.translatesAutoresizingMaskIntoConstraints = false
         barView.layer.cornerRadius = 0
@@ -67,11 +70,19 @@ final class KeyboardViewController: UIInputViewController {
         contentStack.translatesAutoresizingMaskIntoConstraints = false
         barView.contentView.addSubview(contentStack)
 
+        typingStack.axis = .vertical
+        typingStack.spacing = 7
+        typingStack.distribution = .fillEqually
+        typingStack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(typingStack)
+        buildTypingKeyboard()
+
         NSLayoutConstraint.activate([
+            view.heightAnchor.constraint(equalToConstant: 292),
+
             barView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             barView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             barView.topAnchor.constraint(equalTo: view.topAnchor),
-            barView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             barView.heightAnchor.constraint(equalToConstant: 54),
 
             contentStack.leadingAnchor.constraint(equalTo: barView.contentView.leadingAnchor, constant: 8),
@@ -88,7 +99,12 @@ final class KeyboardViewController: UIInputViewController {
             favoriteStack.trailingAnchor.constraint(equalTo: favoriteScrollView.contentLayoutGuide.trailingAnchor),
             favoriteStack.topAnchor.constraint(equalTo: favoriteScrollView.contentLayoutGuide.topAnchor),
             favoriteStack.bottomAnchor.constraint(equalTo: favoriteScrollView.contentLayoutGuide.bottomAnchor),
-            favoriteStack.heightAnchor.constraint(equalTo: favoriteScrollView.frameLayoutGuide.heightAnchor)
+            favoriteStack.heightAnchor.constraint(equalTo: favoriteScrollView.frameLayoutGuide.heightAnchor),
+
+            typingStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
+            typingStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
+            typingStack.topAnchor.constraint(equalTo: barView.bottomAnchor, constant: 8),
+            typingStack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -8)
         ])
     }
 
@@ -164,6 +180,106 @@ final class KeyboardViewController: UIInputViewController {
         return hostingController.view
     }
 
+    private func buildTypingKeyboard() {
+        typingStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        letterButtons.removeAll()
+
+        addLetterRow(["q", "w", "e", "r", "t", "z", "u", "i", "o", "p", "ü"])
+        addLetterRow(["a", "s", "d", "f", "g", "h", "j", "k", "l", "ö", "ä"])
+
+        let thirdRow = UIStackView()
+        thirdRow.axis = .horizontal
+        thirdRow.spacing = 5
+        thirdRow.distribution = .fill
+        thirdRow.addArrangedSubview(actionButton(systemName: "shift", action: #selector(toggleShift)))
+        for letter in ["y", "x", "c", "v", "b", "n", "m"] {
+            thirdRow.addArrangedSubview(letterButton(letter))
+        }
+        thirdRow.addArrangedSubview(actionButton(systemName: "delete.left", action: #selector(deleteBackward)))
+        typingStack.addArrangedSubview(thirdRow)
+
+        let bottomRow = UIStackView()
+        bottomRow.axis = .horizontal
+        bottomRow.spacing = 6
+        bottomRow.distribution = .fill
+        bottomRow.addArrangedSubview(textKey(".", width: 44))
+        bottomRow.addArrangedSubview(spaceButton())
+        bottomRow.addArrangedSubview(textKey(",", width: 44))
+        bottomRow.addArrangedSubview(returnButton())
+        typingStack.addArrangedSubview(bottomRow)
+    }
+
+    private func addLetterRow(_ letters: [String]) {
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.spacing = 5
+        row.distribution = .fillEqually
+        for letter in letters {
+            row.addArrangedSubview(letterButton(letter))
+        }
+        typingStack.addArrangedSubview(row)
+    }
+
+    private func letterButton(_ letter: String) -> UIButton {
+        let button = keyButton(title: isShifted ? letter.uppercased() : letter)
+        button.accessibilityIdentifier = letter
+        button.addAction(UIAction { [weak self] _ in
+            self?.insertLetter(letter)
+        }, for: .touchUpInside)
+        letterButtons.append(button)
+        return button
+    }
+
+    private func textKey(_ text: String, width: CGFloat) -> UIButton {
+        let button = keyButton(title: text)
+        button.widthAnchor.constraint(equalToConstant: width).isActive = true
+        button.addAction(UIAction { [weak self] _ in
+            self?.textDocumentProxy.insertText(text)
+        }, for: .touchUpInside)
+        return button
+    }
+
+    private func spaceButton() -> UIButton {
+        let button = keyButton(title: "Leerzeichen")
+        button.addAction(UIAction { [weak self] _ in
+            self?.textDocumentProxy.insertText(" ")
+        }, for: .touchUpInside)
+        return button
+    }
+
+    private func returnButton() -> UIButton {
+        let button = keyButton(title: "Return")
+        button.widthAnchor.constraint(equalToConstant: 82).isActive = true
+        button.addAction(UIAction { [weak self] _ in
+            self?.textDocumentProxy.insertText("\n")
+        }, for: .touchUpInside)
+        return button
+    }
+
+    private func actionButton(systemName: String, action: Selector) -> UIButton {
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.gray()
+        configuration.image = UIImage(systemName: systemName)
+        configuration.cornerStyle = .medium
+        button.configuration = configuration
+        button.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
+    }
+
+    private func keyButton(title: String) -> UIButton {
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = title
+        configuration.baseBackgroundColor = .systemBackground
+        configuration.baseForegroundColor = .label
+        configuration.cornerStyle = .medium
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 5, leading: 4, bottom: 5, trailing: 4)
+        button.configuration = configuration
+        button.titleLabel?.font = .systemFont(ofSize: 18, weight: .regular)
+        return button
+    }
+
     private func placeholderLabel(_ text: String) -> UILabel {
         let label = UILabel()
         label.text = text
@@ -186,6 +302,30 @@ final class KeyboardViewController: UIInputViewController {
             }
             UIPasteboard.general.image = image
         }
+    }
+
+    private func insertLetter(_ letter: String) {
+        textDocumentProxy.insertText(isShifted ? letter.uppercased() : letter)
+        if isShifted {
+            isShifted = false
+            updateLetterButtons()
+        }
+    }
+
+    private func updateLetterButtons() {
+        for button in letterButtons {
+            guard let letter = button.accessibilityIdentifier else { continue }
+            button.configuration?.title = isShifted ? letter.uppercased() : letter
+        }
+    }
+
+    @objc private func toggleShift() {
+        isShifted.toggle()
+        updateLetterButtons()
+    }
+
+    @objc private func deleteBackward() {
+        textDocumentProxy.deleteBackward()
     }
 
     @objc private func nextKeyboardTapped() {
