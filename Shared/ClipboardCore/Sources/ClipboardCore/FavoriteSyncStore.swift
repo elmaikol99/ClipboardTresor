@@ -100,4 +100,15 @@ public enum ClipContentSignature {
         let hex = digest.map { String(format: "%02x", $0) }.joined()
         return "\(kind.rawValue):\(hex)"
     }
+
+    public static func normalizedTextSignature(_ text: String) -> String? {
+        let normalized = text
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+        let data = Data(normalized.utf8)
+        let digest = SHA256.hash(data: data)
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        return "text-normalized:\(hex)"
+    }
 }

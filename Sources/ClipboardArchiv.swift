@@ -258,6 +258,25 @@ final class FavoriteSyncStore {
     }
 }
 
+enum ClipContentSignature {
+    static func signature(kind: ClipKind, data: Data) -> String {
+        let digest = SHA256.hash(data: data)
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        return "\(kind.rawValue):\(hex)"
+    }
+
+    static func normalizedTextSignature(_ text: String) -> String? {
+        let normalized = text
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+        let data = Data(normalized.utf8)
+        let digest = SHA256.hash(data: data)
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        return "text-normalized:\(hex)"
+    }
+}
+
 final class FavoriteSyncServer {
     private let queue = DispatchQueue(label: "ClipboardTresor.FavoriteSyncServer")
     private let getPayload: () -> Data?
@@ -448,7 +467,7 @@ final class ClipboardStore: ObservableObject {
     private var lastSignature: String?
     private var timer: Timer?
     private let favoriteSyncStore = FavoriteSyncStore()
-    private var contentSignatureCache: [String: String] = [:]
+    private var contentSignatureCache: [String: [String]] = [:]
     private var lastFavoriteSyncRefresh = Date.distantPast
     private var favoriteSyncServer: FavoriteSyncServer?
 
@@ -1219,14 +1238,15 @@ final class ClipboardStore: ObservableObject {
     }
 
     private func publishCurrentFavoritesIfNeeded() {
-        let records = entries.compactMap { entry -> FavoriteSyncRecord? in
-            guard entry.isFavorite == true,
-                  let signature = contentSignature(for: entry) else { return nil }
-            return FavoriteSyncRecord(
-                signature: signature,
-                isFavorite: true,
-                favoriteShortcut: entry.favoriteShortcut
-            )
+        let records = entries.flatMap { entry -> [FavoriteSyncRecord] in
+            guard entry.isFavorite == true else { return [] }
+            return contentSignatures(for: entry).map {
+                FavoriteSyncRecord(
+                    signature: $0,
+                    isFavorite: true,
+                    favoriteShortcut: entry.favoriteShortcut
+                )
+            }
         }
         favoriteSyncStore.seedMissing(records)
     }
@@ -1238,8 +1258,7 @@ final class ClipboardStore: ObservableObject {
 
         var changed = false
         for index in entries.indices {
-            guard let signature = contentSignature(for: entries[index]),
-                  let record = records[signature] else { continue }
+            guard let record = syncedRecord(for: entries[index], records: records) else { continue }
             let syncedShortcut = record.isFavorite ? record.favoriteShortcut : nil
 
             if entries[index].isFavorite != record.isFavorite {
@@ -1259,12 +1278,13 @@ final class ClipboardStore: ObservableObject {
     }
 
     private func pushFavoriteState(for entry: ClipEntry) {
-        guard let signature = contentSignature(for: entry) else { return }
-        favoriteSyncStore.upsert(
-            signature: signature,
-            isFavorite: entry.isFavorite == true,
-            favoriteShortcut: entry.favoriteShortcut
-        )
+        contentSignatures(for: entry).forEach { signature in
+            favoriteSyncStore.upsert(
+                signature: signature,
+                isFavorite: entry.isFavorite == true,
+                favoriteShortcut: entry.favoriteShortcut
+            )
+        }
     }
 
     private func favoriteSyncPayload() -> Data? {
@@ -1289,16 +1309,25 @@ final class ClipboardStore: ObservableObject {
         favoriteSyncServer?.start()
     }
 
-    private func contentSignature(for entry: ClipEntry) -> String? {
+    private func syncedRecord(for entry: ClipEntry, records: [String: FavoriteSyncRecord]) -> FavoriteSyncRecord? {
+        contentSignatures(for: entry)
+            .compactMap { records[$0] }
+            .max { $0.updatedAt < $1.updatedAt }
+    }
+
+    private func contentSignatures(for entry: ClipEntry) -> [String] {
         if let cached = contentSignatureCache[entry.id] {
             return cached
         }
-        guard let data = try? SecureStorage.shared.readData(from: entry.url) else { return nil }
-        let digest = SHA256.hash(data: data)
-        let hex = digest.map { String(format: "%02x", $0) }.joined()
-        let signature = "\(entry.kind.rawValue):\(hex)"
-        contentSignatureCache[entry.id] = signature
-        return signature
+        guard let data = try? SecureStorage.shared.readData(from: entry.url) else { return [] }
+        var signatures = [ClipContentSignature.signature(kind: entry.kind, data: data)]
+        if entry.kind == .text,
+           let text = String(data: data, encoding: .utf8),
+           let normalizedSignature = ClipContentSignature.normalizedTextSignature(text) {
+            signatures.append(normalizedSignature)
+        }
+        contentSignatureCache[entry.id] = signatures
+        return signatures
     }
 
     private func indexModificationDate() -> Date? {
