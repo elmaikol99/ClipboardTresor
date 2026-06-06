@@ -226,12 +226,15 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					02F17AE3AC0D16FC35973257 = {
+						DevelopmentTeam = H9YGR79DYW;
 						ProvisioningStyle = Automatic;
 					};
 					31E5CB33231A54CB9CFC3571 = {
+						DevelopmentTeam = H9YGR79DYW;
 						ProvisioningStyle = Automatic;
 					};
 					7E4E38584721487F7F227E89 = {
+						DevelopmentTeam = H9YGR79DYW;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -309,6 +312,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = ClipboardTresor;
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "ClipboardTresor nutzt Face ID zum Entsperren des Archivs.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -396,6 +400,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = H9YGR79DYW;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -426,6 +431,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = ClipboardTresor;
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "ClipboardTresor nutzt Face ID zum Entsperren des Archivs.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -495,6 +501,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = H9YGR79DYW;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;

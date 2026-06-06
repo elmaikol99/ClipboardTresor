@@ -30,6 +30,8 @@ final class ArchiveListViewModel: ObservableObject {
     @Published var isUnlocked = false
 
     private let repository: ClipboardArchiveRepository
+    private var lastSeenPasteboardChangeCount: Int?
+    private var lastImportedSignature: String?
 
     init(repository: ClipboardArchiveRepository) {
         self.repository = repository
@@ -57,10 +59,26 @@ final class ArchiveListViewModel: ObservableObject {
         }
     }
 
-    func importCurrentClipboard() {
+    func importCurrentClipboardIfChanged() {
+        let pasteboard = UIPasteboard.general
+        let changeCount = pasteboard.changeCount
+        guard lastSeenPasteboardChangeCount != changeCount else { return }
+        lastSeenPasteboardChangeCount = changeCount
+        importCurrentClipboard(manual: false)
+    }
+
+    func importCurrentClipboard(manual: Bool = true) {
         if UIPasteboard.general.hasImages, let image = UIPasteboard.general.image, let data = image.pngData() {
+            let signature = "image:\(fnv1a(data))"
+            guard shouldImport(signature: signature, data: data, kind: .image) else {
+                if manual {
+                    statusText = "Bild ist bereits gespeichert"
+                }
+                return
+            }
             do {
                 try repository.addImageData(data)
+                lastImportedSignature = signature
                 refresh(status: "Bild gespeichert")
             } catch {
                 statusText = "Bild konnte nicht gespeichert werden"
@@ -69,8 +87,17 @@ final class ArchiveListViewModel: ObservableObject {
         }
 
         if UIPasteboard.general.hasStrings, let text = UIPasteboard.general.string, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let data = Data(text.utf8)
+            let signature = "text:\(fnv1a(data))"
+            guard shouldImport(signature: signature, data: data, kind: .text) else {
+                if manual {
+                    statusText = "Text ist bereits gespeichert"
+                }
+                return
+            }
             do {
                 try repository.addText(text)
+                lastImportedSignature = signature
                 refresh(status: "Text gespeichert")
             } catch {
                 statusText = "Text konnte nicht gespeichert werden"
@@ -78,7 +105,9 @@ final class ArchiveListViewModel: ObservableObject {
             return
         }
 
-        statusText = "Keine passende Zwischenablage gefunden"
+        if manual {
+            statusText = "Keine passende Zwischenablage gefunden"
+        }
     }
 
     func copy(_ entry: ClipEntry) {
@@ -111,6 +140,27 @@ final class ArchiveListViewModel: ObservableObject {
         entries = repository.reload()
         statusText = status
     }
+
+    private func shouldImport(signature: String, data: Data, kind: ClipKind) -> Bool {
+        guard signature != lastImportedSignature else { return false }
+        for entry in entries.prefix(12) where entry.kind == kind {
+            guard entry.byteCount == data.count,
+                  let existingData = try? repository.data(for: entry),
+                  existingData == data else { continue }
+            lastImportedSignature = signature
+            return false
+        }
+        return true
+    }
+
+    private func fnv1a(_ data: Data) -> UInt64 {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in data {
+            hash ^= UInt64(byte)
+            hash &*= 1_099_511_628_211
+        }
+        return hash
+    }
 }
 
 enum HistoryScope: String, CaseIterable, Identifiable {
@@ -129,6 +179,7 @@ enum HistoryScope: String, CaseIterable, Identifiable {
 
 struct ArchiveListView: View {
     @ObservedObject var viewModel: ArchiveListViewModel
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
@@ -143,12 +194,20 @@ struct ArchiveListView: View {
             .toolbar {
                 if viewModel.isUnlocked {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button(action: viewModel.importCurrentClipboard) {
+                        Button(action: { viewModel.importCurrentClipboard() }) {
                             Image(systemName: "plus")
                         }
                         .accessibilityLabel("Zwischenablage speichern")
                     }
                 }
+            }
+        }
+        .onAppear {
+            viewModel.importCurrentClipboardIfChanged()
+        }
+        .onChange(of: scenePhase) { _, newValue in
+            if newValue == .active {
+                viewModel.importCurrentClipboardIfChanged()
             }
         }
     }

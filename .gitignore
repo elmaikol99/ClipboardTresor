@@ -1,6 +1,7 @@
 .DS_Store
 build/
 .build/
+Shared/ClipboardCore/.swiftpm/
 DerivedData/
 *.xcuserstate
 *.xcworkspace/xcuserdata/
