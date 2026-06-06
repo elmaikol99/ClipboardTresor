@@ -22,12 +22,19 @@ group.local.clipboardtresor
 
 The Keyboard extension needs `RequestsOpenAccess = YES` in its `Info.plist` if it should read the shared App Group archive.
 
+The iOS app, Keyboard extension, and Share extension also share the archive encryption key through Keychain Sharing:
+
+```text
+H9YGR79DYW.local.clipboardtresor.shared
+```
+
 ## MVP Behavior
 
 - The iOS app shows the encrypted archive, supports search and favorites, and imports changed clipboard content after the archive is unlocked and the app opens or returns to the foreground.
 - While unlocked, the iOS app refreshes the archive list every second so entries synced from the Mac appear without closing and reopening the app.
 - The Share extension stores text, URLs, and image data from other apps.
-- The Keyboard extension shows a compact horizontal favorites bar and inserts text favorites directly.
+- Favorites are stored on the archive entries, so Mac, iOS, and Keyboard see the same favorite state when they use the synced archive.
+- The Keyboard extension shows a compact horizontal favorites bar, refreshes it while open, inserts text favorites directly, and has an app button that opens ClipboardTresor through `clipboardtresor://`.
 - Image favorites from the Keyboard are copied to `UIPasteboard.general`; the user then pastes manually.
 
 ## Enable Keyboard on iPhone

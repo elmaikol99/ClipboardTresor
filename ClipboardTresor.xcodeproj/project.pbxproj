@@ -54,6 +54,7 @@
 		3ECA8C72020130906500E4FB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		567B9294A2A5AE19C1A06F6D /* ClipboardShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ClipboardShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		578A471FDA42C911886BFEEF /* ClipboardTresor.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ClipboardTresor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		58BB6CA205E8817BD6196BED /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		67D3BA95CB8DFFFC97EC438E /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
 		6E8BC3DDE549A50F0FCFC711 /* ClipboardTresorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTresorApp.swift; sourceTree = "<group>"; };
 		7F4060797DA606930E0DDDE0 /* ClipboardCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ClipboardCore; path = Shared/ClipboardCore; sourceTree = SOURCE_ROOT; };
@@ -148,6 +149,7 @@
 			children = (
 				E6BC69E23977F25785F78295 /* ClipboardTresor.entitlements */,
 				6E8BC3DDE549A50F0FCFC711 /* ClipboardTresorApp.swift */,
+				58BB6CA205E8817BD6196BED /* Info.plist */,
 			);
 			name = ClipboardTresorApp;
 			path = iOS/ClipboardTresorApp;
@@ -310,12 +312,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = iOS/ClipboardTresorApp/ClipboardTresor.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = ClipboardTresor;
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "ClipboardTresor nutzt Face ID zum Entsperren des Archivs.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_FILE = iOS/ClipboardTresorApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -429,12 +426,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = iOS/ClipboardTresorApp/ClipboardTresor.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = ClipboardTresor;
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "ClipboardTresor nutzt Face ID zum Entsperren des Archivs.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_FILE = iOS/ClipboardTresorApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

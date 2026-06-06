@@ -5,17 +5,23 @@ public struct ArchiveConfiguration: Sendable {
     public let archiveFolderName: String
     public let appGroupIdentifier: String?
     public let parentPathDefaultsKey: String
+    public let keychainAccessGroup: String?
+    public let prefersLegacyKeychainKey: Bool
 
     public init(
         bundleIdentifier: String = "local.clipboardtresor.app",
         archiveFolderName: String = "ClipboardTresor",
         appGroupIdentifier: String? = nil,
-        parentPathDefaultsKey: String = "ArchiveParentPath"
+        parentPathDefaultsKey: String = "ArchiveParentPath",
+        keychainAccessGroup: String? = nil,
+        prefersLegacyKeychainKey: Bool = false
     ) {
         self.bundleIdentifier = bundleIdentifier
         self.archiveFolderName = archiveFolderName
         self.appGroupIdentifier = appGroupIdentifier
         self.parentPathDefaultsKey = parentPathDefaultsKey
+        self.keychainAccessGroup = keychainAccessGroup
+        self.prefersLegacyKeychainKey = prefersLegacyKeychainKey
     }
 
     public var rootURL: URL {

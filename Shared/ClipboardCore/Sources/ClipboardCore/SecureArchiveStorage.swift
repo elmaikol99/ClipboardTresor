@@ -12,6 +12,8 @@ public enum SecureStorageError: Error, Sendable {
 public final class SecureArchiveStorage: @unchecked Sendable {
     private let service: String
     private let account: String
+    private let accessGroup: String?
+    private let prefersLegacyKey: Bool
     private let header = Data("CLPAENC1\n".utf8)
     private lazy var key: SymmetricKey = {
         do {
@@ -21,9 +23,16 @@ public final class SecureArchiveStorage: @unchecked Sendable {
         }
     }()
 
-    public init(service: String, account: String = "archive-encryption-key-v1") {
+    public init(
+        service: String,
+        account: String = "archive-encryption-key-v1",
+        accessGroup: String? = nil,
+        prefersLegacyKey: Bool = false
+    ) {
         self.service = service
         self.account = account
+        self.accessGroup = accessGroup
+        self.prefersLegacyKey = prefersLegacyKey
     }
 
     public func readData(from url: URL) throws -> Data {
@@ -71,21 +80,18 @@ public final class SecureArchiveStorage: @unchecked Sendable {
     }
 
     private func loadOrCreateKeyData() throws -> Data {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-
-        var item: CFTypeRef?
-        let readStatus = SecItemCopyMatching(query as CFDictionary, &item)
-        if readStatus == errSecSuccess, let data = item as? Data, data.count == 32 {
-            return data
+        if prefersLegacyKey, let legacyData = try? readKeyData(accessGroup: nil) {
+            try upsertSharedKeyData(legacyData)
+            return legacyData
         }
-        if readStatus != errSecItemNotFound {
-            throw SecureStorageError.keychainReadFailed(readStatus)
+
+        if let sharedData = try? readKeyData(accessGroup: accessGroup) {
+            return sharedData
+        }
+
+        if let legacyData = try? readKeyData(accessGroup: nil) {
+            try upsertSharedKeyData(legacyData)
+            return legacyData
         }
 
         var keyData = Data(count: 32)
@@ -96,17 +102,73 @@ public final class SecureArchiveStorage: @unchecked Sendable {
             throw SecureStorageError.randomFailed(randomStatus)
         }
 
-        let addQuery: [String: Any] = [
+        try upsertKeyData(keyData, accessGroup: accessGroup)
+        return keyData
+    }
+
+    private func readKeyData(accessGroup: String?) throws -> Data {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        if let accessGroup {
+            query[kSecAttrAccessGroup as String] = accessGroup
+        }
+
+        var item: CFTypeRef?
+        let readStatus = SecItemCopyMatching(query as CFDictionary, &item)
+        if readStatus == errSecSuccess, let data = item as? Data, data.count == 32 {
+            return data
+        }
+        if readStatus != errSecItemNotFound {
+            throw SecureStorageError.keychainReadFailed(readStatus)
+        }
+        throw SecureStorageError.keychainReadFailed(readStatus)
+    }
+
+    private func upsertSharedKeyData(_ keyData: Data) throws {
+        guard accessGroup != nil else { return }
+        try upsertKeyData(keyData, accessGroup: accessGroup)
+    }
+
+    private func upsertKeyData(_ keyData: Data, accessGroup: String?) throws {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        if let accessGroup {
+            query[kSecAttrAccessGroup as String] = accessGroup
+        }
+
+        let update: [String: Any] = [
+            kSecValueData as String: keyData
+        ]
+        let updateStatus = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+        if updateStatus == errSecSuccess {
+            return
+        }
+        if updateStatus != errSecItemNotFound {
+            throw SecureStorageError.keychainWriteFailed(updateStatus)
+        }
+
+        var addQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             kSecValueData as String: keyData
         ]
+        if let accessGroup {
+            addQuery[kSecAttrAccessGroup as String] = accessGroup
+        }
+
         let writeStatus = SecItemAdd(addQuery as CFDictionary, nil)
         guard writeStatus == errSecSuccess else {
             throw SecureStorageError.keychainWriteFailed(writeStatus)
         }
-        return keyData
     }
 }

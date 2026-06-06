@@ -5,6 +5,7 @@ import UIKit
 import UniformTypeIdentifiers
 
 private let appGroupIdentifier = "group.local.clipboardtresor"
+private let keychainAccessGroup = "H9YGR79DYW.local.clipboardtresor.shared"
 
 @main
 struct ClipboardTresorApp: App {
@@ -13,7 +14,11 @@ struct ClipboardTresorApp: App {
             ArchiveListView(
                 viewModel: ArchiveListViewModel(
                     repository: ClipboardArchiveRepository(
-                        configuration: ArchiveConfiguration(appGroupIdentifier: appGroupIdentifier)
+                        configuration: ArchiveConfiguration(
+                            appGroupIdentifier: appGroupIdentifier,
+                            keychainAccessGroup: keychainAccessGroup,
+                            prefersLegacyKeychainKey: true
+                        )
                     )
                 )
             )

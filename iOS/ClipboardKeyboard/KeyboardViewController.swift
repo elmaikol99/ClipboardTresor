@@ -2,16 +2,21 @@ import ClipboardCore
 import UIKit
 
 private let appGroupIdentifier = "group.local.clipboardtresor"
+private let keychainAccessGroup = "H9YGR79DYW.local.clipboardtresor.shared"
 
 final class KeyboardViewController: UIInputViewController {
     private let repository = ClipboardArchiveRepository(
-        configuration: ArchiveConfiguration(appGroupIdentifier: appGroupIdentifier)
+        configuration: ArchiveConfiguration(
+            appGroupIdentifier: appGroupIdentifier,
+            keychainAccessGroup: keychainAccessGroup
+        )
     )
 
     private let barView = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
     private let favoriteScrollView = UIScrollView()
     private let favoriteStack = UIStackView()
-    private let statusLabel = UILabel()
+    private var refreshTimer: Timer?
+    private var lastFavoriteSignature: String?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -22,6 +27,12 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         reloadFavorites()
+        startRefreshingFavorites()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        stopRefreshingFavorites()
     }
 
     private func configureLayout() {
@@ -36,6 +47,9 @@ final class KeyboardViewController: UIInputViewController {
         globeButton.addTarget(self, action: #selector(nextKeyboardTapped), for: .touchUpInside)
         globeButton.addTarget(self, action: #selector(nextKeyboardTouchDown(_:event:)), for: .touchDown)
 
+        let appButton = iconButton(systemName: "app.badge")
+        appButton.addTarget(self, action: #selector(openApp), for: .touchUpInside)
+
         favoriteScrollView.showsHorizontalScrollIndicator = false
         favoriteScrollView.alwaysBounceHorizontal = true
 
@@ -45,13 +59,7 @@ final class KeyboardViewController: UIInputViewController {
         favoriteStack.translatesAutoresizingMaskIntoConstraints = false
         favoriteScrollView.addSubview(favoriteStack)
 
-        statusLabel.text = "ClipboardTresor"
-        statusLabel.textColor = .secondaryLabel
-        statusLabel.font = .preferredFont(forTextStyle: .caption2)
-        statusLabel.textAlignment = .right
-        statusLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        let contentStack = UIStackView(arrangedSubviews: [globeButton, favoriteScrollView, statusLabel])
+        let contentStack = UIStackView(arrangedSubviews: [globeButton, favoriteScrollView, appButton])
         contentStack.axis = .horizontal
         contentStack.alignment = .center
         contentStack.spacing = 8
@@ -72,7 +80,8 @@ final class KeyboardViewController: UIInputViewController {
 
             globeButton.widthAnchor.constraint(equalToConstant: 36),
             globeButton.heightAnchor.constraint(equalToConstant: 36),
-            statusLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 96),
+            appButton.widthAnchor.constraint(equalToConstant: 36),
+            appButton.heightAnchor.constraint(equalToConstant: 36),
 
             favoriteStack.leadingAnchor.constraint(equalTo: favoriteScrollView.contentLayoutGuide.leadingAnchor),
             favoriteStack.trailingAnchor.constraint(equalTo: favoriteScrollView.contentLayoutGuide.trailingAnchor),
@@ -83,19 +92,21 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func reloadFavorites() {
+        let favorites = Array(repository.reload().filter { $0.isFavorite == true }.prefix(20))
+        let signature = favorites.map { "\($0.id):\($0.preview):\($0.isFavorite == true)" }.joined(separator: "|")
+        guard signature != lastFavoriteSignature else { return }
+        lastFavoriteSignature = signature
+
         favoriteStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
-        let favorites = repository.reload().filter { $0.isFavorite == true }.prefix(20)
         guard !favorites.isEmpty else {
             favoriteStack.addArrangedSubview(placeholderLabel("Keine Favoriten"))
-            statusLabel.text = "Favoriten"
             return
         }
 
         for entry in favorites {
             favoriteStack.addArrangedSubview(favoriteButton(for: entry))
         }
-        statusLabel.text = "\(favorites.count)"
     }
 
     private func favoriteButton(for entry: ClipEntry) -> UIButton {
@@ -114,6 +125,20 @@ final class KeyboardViewController: UIInputViewController {
             self?.insert(entry)
         }, for: .touchUpInside)
         return button
+    }
+
+    private func startRefreshingFavorites() {
+        refreshTimer?.invalidate()
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.reloadFavorites()
+        }
+        refreshTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopRefreshingFavorites() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
     }
 
     private func iconButton(systemName: String) -> UIButton {
@@ -138,20 +163,21 @@ final class KeyboardViewController: UIInputViewController {
         switch entry.kind {
         case .text:
             guard let text = try? repository.string(for: entry) else {
-                statusLabel.text = "Fehler"
                 return
             }
             textDocumentProxy.insertText(text)
-            statusLabel.text = "Eingefügt"
         case .image:
             guard let data = try? repository.data(for: entry),
                   let image = UIImage(data: data) else {
-                statusLabel.text = "Fehler"
                 return
             }
             UIPasteboard.general.image = image
-            statusLabel.text = "Kopiert"
         }
+    }
+
+    @objc private func openApp() {
+        guard let url = URL(string: "clipboardtresor://") else { return }
+        extensionContext?.open(url)
     }
 
     @objc private func nextKeyboardTapped() {

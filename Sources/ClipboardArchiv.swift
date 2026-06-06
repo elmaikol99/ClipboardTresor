@@ -255,10 +255,12 @@ final class ClipboardStore: ObservableObject {
     @Published private(set) var entries: [ClipEntry] = []
     @Published var lastStatus: String = "Bereit"
     @Published var scrollToTopRequest = 0
+    var onExternalReload: (() -> Void)?
 
     private let pasteboard = NSPasteboard.general
     private let rootURL: URL
     private let indexURL: URL
+    private var lastIndexModifiedAt: Date?
     private var lastChangeCount: Int
     private var skippedChangeCount: Int?
     private var lastSignature: String?
@@ -292,6 +294,7 @@ final class ClipboardStore: ObservableObject {
         load()
         createFolders()
         migrateExistingEntriesForSecurity()
+        lastIndexModifiedAt = indexModificationDate()
     }
 
     func startMonitoring() {
@@ -421,6 +424,8 @@ final class ClipboardStore: ObservableObject {
     }
 
     private func pollPasteboard() {
+        refreshFromExternalIndexIfNeeded()
+
         let changeCount = pasteboard.changeCount
         guard changeCount != lastChangeCount else { return }
         lastChangeCount = changeCount
@@ -983,9 +988,28 @@ final class ClipboardStore: ObservableObject {
         do {
             let data = try encoder.encode(entries)
             try SecureStorage.shared.writeEncrypted(data, to: indexURL)
+            lastIndexModifiedAt = indexModificationDate()
         } catch {
             lastStatus = "Index konnte nicht gespeichert werden: \(error.localizedDescription)"
         }
+    }
+
+    private func refreshFromExternalIndexIfNeeded() {
+        guard let modifiedAt = indexModificationDate() else { return }
+        guard lastIndexModifiedAt != modifiedAt else { return }
+
+        let oldEntries = entries
+        load()
+        lastIndexModifiedAt = modifiedAt
+
+        if oldEntries != entries {
+            onExternalReload?()
+        }
+    }
+
+    private func indexModificationDate() -> Date? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: indexURL.path) else { return nil }
+        return attributes[.modificationDate] as? Date
     }
 
     private func fnv1a(_ data: Data) -> UInt64 {
@@ -1829,6 +1853,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         configureMenu()
         configureWindow()
+        store.onExternalReload = { [weak self] in
+            self?.refreshFavoriteShortcuts()
+        }
         store.startMonitoring()
 
         hotKeyMonitor = HoldCommandCMonitor(

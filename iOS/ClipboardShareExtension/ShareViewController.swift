@@ -3,10 +3,14 @@ import UIKit
 import UniformTypeIdentifiers
 
 private let appGroupIdentifier = "group.local.clipboardtresor"
+private let keychainAccessGroup = "H9YGR79DYW.local.clipboardtresor.shared"
 
 final class ShareViewController: UIViewController {
     private let repository = ClipboardArchiveRepository(
-        configuration: ArchiveConfiguration(appGroupIdentifier: appGroupIdentifier)
+        configuration: ArchiveConfiguration(
+            appGroupIdentifier: appGroupIdentifier,
+            keychainAccessGroup: keychainAccessGroup
+        )
     )
 
     override func viewDidLoad() {

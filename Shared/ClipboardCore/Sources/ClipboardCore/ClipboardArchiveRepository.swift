@@ -29,7 +29,11 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
 
     public init(configuration: ArchiveConfiguration = ArchiveConfiguration()) {
         self.configuration = configuration
-        self.storage = SecureArchiveStorage(service: configuration.bundleIdentifier)
+        self.storage = SecureArchiveStorage(
+            service: configuration.bundleIdentifier,
+            accessGroup: configuration.keychainAccessGroup,
+            prefersLegacyKey: configuration.prefersLegacyKeychainKey
+        )
         rootURL = configuration.rootURL
         indexURL = rootURL.appendingPathComponent("clipboard_history.json")
         createFolders()
