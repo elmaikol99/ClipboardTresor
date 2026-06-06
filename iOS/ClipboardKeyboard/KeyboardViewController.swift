@@ -74,6 +74,7 @@ private struct ClipboardTresorKeyboardView: View {
             emojiKeyboard: { $0.view },
             toolbar: { _ in
                 ClipboardFavoritesToolbar(
+                    keyboardContext: keyboardContext,
                     repository: repository,
                     insertText: insertText,
                     copyImage: copyImage
@@ -85,11 +86,13 @@ private struct ClipboardTresorKeyboardView: View {
 }
 
 private struct ClipboardFavoritesToolbar: View {
+    @ObservedObject var keyboardContext: KeyboardContext
     let repository: ClipboardArchiveRepository?
     let insertText: (String) -> Void
     let copyImage: (Data) -> Void
 
     @State private var favorites: [ClipEntry] = []
+    @State private var entryCount = 0
     @State private var syncClient: KeyboardFavoriteSyncClient?
 
     var body: some View {
@@ -97,7 +100,7 @@ private struct ClipboardFavoritesToolbar: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     if favorites.isEmpty {
-                        Text("Favoriten")
+                        Text(emptyStateText)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 8)
@@ -154,12 +157,25 @@ private struct ClipboardFavoritesToolbar: View {
     private func reloadFavorites() {
         guard let repository else {
             favorites = []
+            entryCount = 0
             return
         }
-        let reloaded = Array(repository.reload().filter { $0.isFavorite == true }.prefix(20))
+        let entries = repository.reload()
+        entryCount = entries.count
+        let reloaded = Array(entries.filter { $0.isFavorite == true }.prefix(20))
         if reloaded != favorites {
             favorites = reloaded
         }
+    }
+
+    private var emptyStateText: String {
+        if !keyboardContext.hasFullAccess {
+            return "Full Access aus"
+        }
+        if entryCount == 0 {
+            return "Archiv nicht lesbar"
+        }
+        return "0/\(entryCount) Favoriten"
     }
 
     private func paste(_ entry: ClipEntry) {
