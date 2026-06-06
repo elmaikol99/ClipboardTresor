@@ -26,8 +26,7 @@ The Keyboard extension needs `RequestsOpenAccess = YES` in its `Info.plist` if i
 
 - The iOS app shows the encrypted archive, supports search and favorites, and imports changed clipboard content when the app opens or returns to the foreground.
 - The Share extension stores text, URLs, and image data from other apps.
-- The Keyboard extension shows a horizontal favorites bar above a small custom keyboard and inserts text favorites directly.
-- The Keyboard extension protects favorites with device authentication.
+- The Keyboard extension shows a compact horizontal favorites bar and inserts text favorites directly.
 - Image favorites from the Keyboard are copied to `UIPasteboard.general`; the user then pastes manually.
 
 ## Enable Keyboard on iPhone
@@ -49,6 +48,7 @@ Full Access is required so the Keyboard extension can read the shared encrypted 
 ## Important iOS limits
 
 - iOS does not allow macOS-style global background clipboard monitoring.
+- iOS does not allow a third-party app to add a bar above Apple's standard keyboard. The ClipboardTresor keyboard is therefore a compact custom keyboard made only of the favorites bar.
 - ClipboardTresor can import copied content when the iOS app becomes active, but it cannot observe every copy while it is fully in the background.
 - Custom keyboards cannot type into secure text fields.
 - Some apps can block custom keyboards.
