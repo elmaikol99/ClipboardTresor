@@ -57,6 +57,7 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
         rootURL = configuration.rootURL
         indexURL = rootURL.appendingPathComponent("clipboard_history.json")
         createFolders()
+        storage.repairSharedKeyIfNeeded(usingEncryptedFile: indexURL)
         load()
         migrateIndexIfNeeded()
         publishCurrentFavoritesIfNeeded()

@@ -15,13 +15,8 @@ public final class SecureArchiveStorage: @unchecked Sendable {
     private let accessGroup: String?
     private let prefersLegacyKey: Bool
     private let header = Data("CLPAENC1\n".utf8)
-    private lazy var key: SymmetricKey = {
-        do {
-            return SymmetricKey(data: try loadOrCreateKeyData())
-        } catch {
-            fatalError("Clipboard encryption key unavailable: \(error)")
-        }
-    }()
+    private let cacheLock = NSLock()
+    private var cachedKeyData: Data?
 
     public init(
         service: String,
@@ -59,8 +54,28 @@ public final class SecureArchiveStorage: @unchecked Sendable {
         try? writeEncrypted(data, to: url)
     }
 
+    public func repairSharedKeyIfNeeded(usingEncryptedFile url: URL) {
+        guard prefersLegacyKey,
+              accessGroup != nil,
+              let data = try? Data(contentsOf: url),
+              isEncrypted(data) else { return }
+
+        if let legacyData = try? readKeyData(accessGroup: nil),
+           canDecrypt(data, using: legacyData) {
+            try? upsertSharedKeyData(legacyData)
+            setCachedKeyData(legacyData)
+            return
+        }
+
+        if let sharedData = try? readKeyData(accessGroup: accessGroup),
+           canDecrypt(data, using: sharedData) {
+            setCachedKeyData(sharedData)
+        }
+    }
+
     private func encryptIfNeeded(_ data: Data) throws -> Data {
         guard !isEncrypted(data) else { return data }
+        let key = SymmetricKey(data: try currentKeyData())
         let sealed = try AES.GCM.seal(data, using: key)
         guard let combined = sealed.combined else {
             throw SecureStorageError.encryptionFailed
@@ -70,8 +85,13 @@ public final class SecureArchiveStorage: @unchecked Sendable {
 
     private func decryptIfNeeded(_ data: Data) throws -> Data {
         guard isEncrypted(data) else { return data }
+        return try decrypt(data, using: try currentKeyData())
+    }
+
+    private func decrypt(_ data: Data, using keyData: Data) throws -> Data {
         let encrypted = data.dropFirst(header.count)
         let box = try AES.GCM.SealedBox(combined: encrypted)
+        let key = SymmetricKey(data: keyData)
         return try AES.GCM.open(box, using: key)
     }
 
@@ -79,17 +99,35 @@ public final class SecureArchiveStorage: @unchecked Sendable {
         data.count > header.count && data.prefix(header.count) == header
     }
 
-    private func loadOrCreateKeyData() throws -> Data {
-        if prefersLegacyKey, let legacyData = try? readKeyData(accessGroup: nil) {
-            try upsertSharedKeyData(legacyData)
-            return legacyData
-        }
+    private func canDecrypt(_ data: Data, using keyData: Data) -> Bool {
+        (try? decrypt(data, using: keyData)) != nil
+    }
 
+    private func currentKeyData() throws -> Data {
+        cacheLock.lock()
+        if let cachedKeyData {
+            cacheLock.unlock()
+            return cachedKeyData
+        }
+        cacheLock.unlock()
+
+        let loadedKeyData = try loadOrCreateKeyData()
+        setCachedKeyData(loadedKeyData)
+        return loadedKeyData
+    }
+
+    private func setCachedKeyData(_ keyData: Data) {
+        cacheLock.lock()
+        cachedKeyData = keyData
+        cacheLock.unlock()
+    }
+
+    private func loadOrCreateKeyData() throws -> Data {
         if let sharedData = try? readKeyData(accessGroup: accessGroup) {
             return sharedData
         }
 
-        if let legacyData = try? readKeyData(accessGroup: nil) {
+        if prefersLegacyKey, let legacyData = try? readKeyData(accessGroup: nil) {
             try upsertSharedKeyData(legacyData)
             return legacyData
         }
