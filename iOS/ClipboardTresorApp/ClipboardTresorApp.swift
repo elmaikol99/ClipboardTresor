@@ -366,15 +366,7 @@ struct ArchiveListView: View {
         VStack(spacing: 0) {
             topBar
 
-            Picker("", selection: $viewModel.selectedScope) {
-                ForEach(HistoryScope.allCases) { scope in
-                    Text(scope.title).tag(scope)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
+            scopeTabs
 
             List {
                 ForEach(viewModel.filteredEntries) { entry in
@@ -418,6 +410,38 @@ struct ArchiveListView: View {
                 .fill(AppTheme.stroke)
                 .frame(height: 1)
         }
+    }
+
+    private var scopeTabs: some View {
+        HStack(spacing: 8) {
+            ForEach(HistoryScope.allCases) { scope in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        viewModel.selectedScope = scope
+                    }
+                } label: {
+                    Text(scope.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(viewModel.selectedScope == scope ? .white : .secondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 34)
+                        .background {
+                            if viewModel.selectedScope == scope {
+                                Capsule()
+                                    .fill(.ultraThinMaterial)
+                                    .overlay {
+                                        Capsule().stroke(AppTheme.stroke)
+                                    }
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(Color.clear)
     }
 
     private var statusBar: some View {
