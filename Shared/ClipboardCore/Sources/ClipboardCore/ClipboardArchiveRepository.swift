@@ -12,7 +12,7 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
 
     private let rootURL: URL
     private let indexURL: URL
-    private let favoriteSyncStore = FavoriteSyncStore()
+    private let favoriteSyncStore: FavoriteSyncStore
     private var contentSignatureCache: [String: [String]] = [:]
 
     private let folderFormatter: DateFormatter = {
@@ -36,6 +36,7 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
             accessGroup: configuration.keychainAccessGroup,
             prefersLegacyKey: configuration.prefersLegacyKeychainKey
         )
+        self.favoriteSyncStore = FavoriteSyncStore(appGroupIdentifier: configuration.appGroupIdentifier)
         rootURL = configuration.rootURL
         indexURL = rootURL.appendingPathComponent("clipboard_history.json")
         createFolders()

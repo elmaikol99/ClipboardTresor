@@ -16,10 +16,19 @@ public struct FavoriteSyncRecord: Codable, Equatable, Sendable {
 }
 
 public final class FavoriteSyncStore: @unchecked Sendable {
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
+    private let standardDefaults = UserDefaults.standard
     private let recordsKey = "clipboardTresor.favoriteSync.records.v1"
 
-    public init() {}
+    public init(appGroupIdentifier: String? = nil) {
+        if let appGroupIdentifier,
+           let appGroupDefaults = UserDefaults(suiteName: appGroupIdentifier) {
+            defaults = appGroupDefaults
+        } else {
+            defaults = .standard
+        }
+        migrateStandardRecordsIfNeeded()
+    }
 
     public func records() -> [String: FavoriteSyncRecord] {
         decode(defaults.data(forKey: recordsKey))
@@ -91,6 +100,27 @@ public final class FavoriteSyncStore: @unchecked Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return (try? decoder.decode([String: FavoriteSyncRecord].self, from: data)) ?? [:]
+    }
+
+    private func migrateStandardRecordsIfNeeded() {
+        guard defaults !== standardDefaults,
+              let standardData = standardDefaults.data(forKey: recordsKey) else { return }
+        let standardRecords = decode(standardData)
+        guard !standardRecords.isEmpty else { return }
+
+        var current = records()
+        var changed = false
+        for (signature, record) in standardRecords {
+            if let existing = current[signature], existing.updatedAt >= record.updatedAt {
+                continue
+            }
+            current[signature] = record
+            changed = true
+        }
+
+        if changed {
+            save(current)
+        }
     }
 }
 

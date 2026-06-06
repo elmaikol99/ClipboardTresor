@@ -20,7 +20,8 @@ final class KeyboardViewController: KeyboardInputViewController {
     private let repository = ClipboardArchiveRepository(
         configuration: ArchiveConfiguration(
             appGroupIdentifier: appGroupIdentifier,
-            keychainAccessGroup: keychainAccessGroup
+            keychainAccessGroup: keychainAccessGroup,
+            prefersLegacyKeychainKey: true
         )
     )
 
