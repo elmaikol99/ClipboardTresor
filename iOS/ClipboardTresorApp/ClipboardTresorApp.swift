@@ -55,11 +55,15 @@ final class ArchiveListViewModel: ObservableObject {
             DispatchQueue.main.async {
                 self?.isUnlocked = success
                 self?.statusText = success ? "Archiv entsperrt" : (error?.localizedDescription ?? "Archiv gesperrt")
+                if success {
+                    self?.importCurrentClipboardIfChanged()
+                }
             }
         }
     }
 
     func importCurrentClipboardIfChanged() {
+        guard isUnlocked else { return }
         let pasteboard = UIPasteboard.general
         let changeCount = pasteboard.changeCount
         guard lastSeenPasteboardChangeCount != changeCount else { return }
