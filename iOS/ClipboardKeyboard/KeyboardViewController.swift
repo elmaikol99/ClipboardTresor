@@ -37,6 +37,7 @@ final class KeyboardViewController: KeyboardInputViewController {
             ClipboardTresorKeyboardView(
                 services: controller.services,
                 state: controller.state,
+                keyboardContext: controller.state.keyboardContext,
                 repository: self?.repository,
                 insertText: { [weak self] text in
                     self?.textDocumentProxy.insertText(text)
@@ -53,13 +54,14 @@ final class KeyboardViewController: KeyboardInputViewController {
 private struct ClipboardTresorKeyboardView: View {
     let services: Keyboard.Services
     let state: Keyboard.State
+    @ObservedObject var keyboardContext: KeyboardContext
     let repository: ClipboardArchiveRepository?
     let insertText: (String) -> Void
     let copyImage: (Data) -> Void
 
     var body: some View {
         KeyboardView(
-            layout: KeyboardLayout.standard(for: state.keyboardContext),
+            layout: KeyboardLayout.standard(for: keyboardContext),
             services: services,
             buttonContent: { $0.view },
             buttonView: { $0.view },
@@ -73,6 +75,7 @@ private struct ClipboardTresorKeyboardView: View {
                 )
             }
         )
+        .keyboardState(state)
     }
 }
 
