@@ -241,14 +241,15 @@ final class FavoriteLANSyncClient: @unchecked Sendable {
     }
 
     private func send(payload: Data, on connection: NWConnection) {
-        let header = """
-        POST /favorites HTTP/1.1\r
-        Host: ClipboardTresor.local\r
-        Content-Type: application/json\r
-        Content-Length: \(payload.count)\r
-        Connection: close\r
-        \r
-        """
+        let header = [
+            "POST /favorites HTTP/1.1",
+            "Host: ClipboardTresor.local",
+            "Content-Type: application/json",
+            "Content-Length: \(payload.count)",
+            "Connection: close",
+            "",
+            ""
+        ].joined(separator: "\r\n")
         var request = Data(header.utf8)
         request.append(payload)
         connection.send(content: request, completion: .contentProcessed { [weak self, weak connection] error in

@@ -342,16 +342,17 @@ final class FavoriteSyncServer {
         }
 
         let body = getPayload() ?? Data("{}".utf8)
-        let header = """
-        HTTP/1.1 200 OK\r
-        Content-Type: application/json\r
-        Content-Length: \(body.count)\r
-        Connection: close\r
-        \r
-        """
+        let header = [
+            "HTTP/1.1 200 OK",
+            "Content-Type: application/json",
+            "Content-Length: \(body.count)",
+            "Connection: close",
+            "",
+            ""
+        ].joined(separator: "\r\n")
         var response = Data(header.utf8)
         response.append(body)
-        connection.send(content: response, completion: .contentProcessed { _ in
+        connection.send(content: response, isComplete: true, completion: .contentProcessed { _ in
             connection.cancel()
         })
     }
