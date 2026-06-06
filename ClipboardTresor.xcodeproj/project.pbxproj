@@ -10,6 +10,7 @@
 		00A98E6EB5D1DA8A70BB6867 /* ClipboardTresorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8BC3DDE549A50F0FCFC711 /* ClipboardTresorApp.swift */; };
 		0D93F6A3A76F15A0A2C10E63 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D3BA95CB8DFFFC97EC438E /* KeyboardViewController.swift */; };
 		6A1E48A0BF0843AA6A91088E /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AABBAF720E0D2B764A6ACAC /* ShareViewController.swift */; };
+		A5B45803DDFF999ECC14E5B1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8649B393427AE499BA3CAEBF /* Assets.xcassets */; };
 		A801A2EC43DDE00AA79EACED /* ClipboardCore in Frameworks */ = {isa = PBXBuildFile; productRef = E231C991187E56943D596809 /* ClipboardCore */; };
 		C1622CD81CBB04481409980F /* ClipboardShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 567B9294A2A5AE19C1A06F6D /* ClipboardShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DDE047344028943ED228E0E0 /* KeyboardKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4DF53A2AAD06A5D34D41FACD /* KeyboardKit */; };
@@ -59,6 +60,7 @@
 		67D3BA95CB8DFFFC97EC438E /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
 		6E8BC3DDE549A50F0FCFC711 /* ClipboardTresorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTresorApp.swift; sourceTree = "<group>"; };
 		7F4060797DA606930E0DDDE0 /* ClipboardCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ClipboardCore; path = Shared/ClipboardCore; sourceTree = SOURCE_ROOT; };
+		8649B393427AE499BA3CAEBF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9DE69C27C676D4BCE6EC68B2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DB2BE9B068BF47921883CB58 /* ClipboardKeyboard.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ClipboardKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E6BC69E23977F25785F78295 /* ClipboardTresor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ClipboardTresor.entitlements; sourceTree = "<group>"; };
@@ -149,6 +151,7 @@
 		FE2C117E30B44B38955C8413 /* ClipboardTresorApp */ = {
 			isa = PBXGroup;
 			children = (
+				8649B393427AE499BA3CAEBF /* Assets.xcassets */,
 				E6BC69E23977F25785F78295 /* ClipboardTresor.entitlements */,
 				6E8BC3DDE549A50F0FCFC711 /* ClipboardTresorApp.swift */,
 				58BB6CA205E8817BD6196BED /* Info.plist */,
@@ -203,6 +206,7 @@
 			buildConfigurationList = 5869DBF64234123451C35B3E /* Build configuration list for PBXNativeTarget "ClipboardTresor" */;
 			buildPhases = (
 				09EAEA25D1DACD299D816476 /* Sources */,
+				C2BDBD9E8F804E66F81FC358 /* Resources */,
 				6F2E53D1EC890BD555A2830C /* Frameworks */,
 				D197F7EAFD9D85850415AA0F /* Embed Foundation Extensions */,
 			);
@@ -268,6 +272,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C2BDBD9E8F804E66F81FC358 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A5B45803DDFF999ECC14E5B1 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		00066B41C26640A86389B409 /* Sources */ = {
