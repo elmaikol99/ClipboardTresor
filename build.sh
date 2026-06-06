@@ -21,6 +21,7 @@ swiftc \
   -framework Carbon \
   -framework CryptoKit \
   -framework LocalAuthentication \
+  -framework Network \
   -framework Security
 
 chmod +x "$BIN"

@@ -12,6 +12,8 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
 
     private let rootURL: URL
     private let indexURL: URL
+    private let favoriteSyncStore = FavoriteSyncStore()
+    private var contentSignatureCache: [String: String] = [:]
 
     private let folderFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -39,11 +41,15 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
         createFolders()
         load()
         migrateIndexIfNeeded()
+        publishCurrentFavoritesIfNeeded()
+        applyFavoriteSyncRecords()
     }
 
     @discardableResult
     public func reload() -> [ClipEntry] {
         load()
+        publishCurrentFavoritesIfNeeded()
+        applyFavoriteSyncRecords()
         return entries
     }
 
@@ -110,7 +116,23 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
         saveIndex()
     }
 
+    public func favoriteSyncPayload() -> Data? {
+        publishCurrentFavoritesIfNeeded()
+        return favoriteSyncStore.encodedRecords()
+    }
+
+    @discardableResult
+    public func mergeFavoriteSyncPayload(_ data: Data) -> Bool {
+        if favoriteSyncStore.mergeEncodedRecords(data) {
+            load()
+            return applyFavoriteSyncRecords()
+        }
+        return false
+    }
+
     public func toggleFavorite(_ entry: ClipEntry) throws {
+        load()
+        applyFavoriteSyncRecords(saveIfChanged: false)
         guard let index = entries.firstIndex(where: { $0.id == entry.id }) else {
             throw ClipboardArchiveError.entryNotFound
         }
@@ -120,28 +142,36 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
             entries[index].favoriteShortcut = nil
         }
         saveIndex()
+        pushFavoriteState(for: entries[index])
     }
 
     public func setFavoriteShortcut(_ shortcut: String?, for entry: ClipEntry) throws {
+        load()
+        applyFavoriteSyncRecords(saveIfChanged: false)
         guard let index = entries.firstIndex(where: { $0.id == entry.id }) else {
             throw ClipboardArchiveError.entryNotFound
         }
 
+        var changedEntries: [ClipEntry] = []
         if let shortcut {
             for otherIndex in entries.indices where entries[otherIndex].favoriteShortcut == shortcut {
                 entries[otherIndex].favoriteShortcut = nil
+                changedEntries.append(entries[otherIndex])
             }
             entries[index].isFavorite = true
             entries[index].favoriteShortcut = shortcut
         } else {
             entries[index].favoriteShortcut = nil
         }
+        changedEntries.append(entries[index])
 
         saveIndex()
+        changedEntries.forEach { pushFavoriteState(for: $0) }
     }
 
     private func insertAndSave(_ entry: ClipEntry) {
         entries.insert(entry, at: 0)
+        applyFavoriteSyncRecords(saveIfChanged: false)
         saveIndex()
     }
 
@@ -169,6 +199,65 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(entries) else { return }
         try? storage.writeEncrypted(data, to: indexURL)
+    }
+
+    private func publishCurrentFavoritesIfNeeded() {
+        let records = entries.compactMap { entry -> FavoriteSyncRecord? in
+            guard entry.isFavorite == true,
+                  let signature = contentSignature(for: entry) else { return nil }
+            return FavoriteSyncRecord(
+                signature: signature,
+                isFavorite: true,
+                favoriteShortcut: entry.favoriteShortcut
+            )
+        }
+        favoriteSyncStore.seedMissing(records)
+    }
+
+    @discardableResult
+    private func applyFavoriteSyncRecords(saveIfChanged: Bool = true) -> Bool {
+        let records = favoriteSyncStore.records()
+        guard !records.isEmpty else { return false }
+
+        var changed = false
+        for index in entries.indices {
+            guard let signature = contentSignature(for: entries[index]),
+                  let record = records[signature] else { continue }
+            let syncedShortcut = record.isFavorite ? record.favoriteShortcut : nil
+
+            if entries[index].isFavorite != record.isFavorite {
+                entries[index].isFavorite = record.isFavorite
+                changed = true
+            }
+            if entries[index].favoriteShortcut != syncedShortcut {
+                entries[index].favoriteShortcut = syncedShortcut
+                changed = true
+            }
+        }
+
+        if changed && saveIfChanged {
+            saveIndex()
+        }
+        return changed
+    }
+
+    private func pushFavoriteState(for entry: ClipEntry) {
+        guard let signature = contentSignature(for: entry) else { return }
+        favoriteSyncStore.upsert(
+            signature: signature,
+            isFavorite: entry.isFavorite == true,
+            favoriteShortcut: entry.favoriteShortcut
+        )
+    }
+
+    private func contentSignature(for entry: ClipEntry) -> String? {
+        if let cached = contentSignatureCache[entry.id] {
+            return cached
+        }
+        guard let data = try? storage.readData(from: entry.url) else { return nil }
+        let signature = ClipContentSignature.signature(kind: entry.kind, data: data)
+        contentSignatureCache[entry.id] = signature
+        return signature
     }
 
     private func migrateIndexIfNeeded() {

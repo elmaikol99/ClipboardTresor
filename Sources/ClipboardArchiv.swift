@@ -4,6 +4,7 @@ import ApplicationServices
 import Carbon
 import CryptoKit
 import LocalAuthentication
+import Network
 import Security
 
 enum ArchiveLocation {
@@ -166,6 +167,187 @@ final class SecureStorage {
     }
 }
 
+struct FavoriteSyncRecord: Codable, Equatable {
+    let signature: String
+    var isFavorite: Bool
+    var favoriteShortcut: String?
+    var updatedAt: Date
+
+    init(signature: String, isFavorite: Bool, favoriteShortcut: String?, updatedAt: Date = Date()) {
+        self.signature = signature
+        self.isFavorite = isFavorite
+        self.favoriteShortcut = favoriteShortcut
+        self.updatedAt = updatedAt
+    }
+}
+
+final class FavoriteSyncStore {
+    private let defaults = UserDefaults.standard
+    private let recordsKey = "clipboardTresor.favoriteSync.records.v1"
+
+    func records() -> [String: FavoriteSyncRecord] {
+        decode(defaults.data(forKey: recordsKey))
+    }
+
+    func upsert(signature: String, isFavorite: Bool, favoriteShortcut: String?) {
+        var current = records()
+        current[signature] = FavoriteSyncRecord(
+            signature: signature,
+            isFavorite: isFavorite,
+            favoriteShortcut: isFavorite ? favoriteShortcut : nil
+        )
+        save(current)
+    }
+
+    func seedMissing(_ recordsToSeed: [FavoriteSyncRecord]) {
+        var current = records()
+        var changed = false
+
+        for record in recordsToSeed where current[record.signature] == nil {
+            current[record.signature] = record
+            changed = true
+        }
+
+        if changed {
+            save(current)
+        }
+    }
+
+    func encodedRecords() -> Data? {
+        encode(records())
+    }
+
+    @discardableResult
+    func mergeEncodedRecords(_ data: Data) -> Bool {
+        let incoming = decode(data)
+        guard !incoming.isEmpty else { return false }
+        var current = records()
+        var changed = false
+
+        for (signature, record) in incoming {
+            if let existing = current[signature], existing.updatedAt >= record.updatedAt {
+                continue
+            }
+            current[signature] = record
+            changed = true
+        }
+
+        if changed {
+            save(current)
+        }
+        return changed
+    }
+
+    private func save(_ records: [String: FavoriteSyncRecord]) {
+        guard let data = encode(records) else { return }
+        defaults.set(data, forKey: recordsKey)
+    }
+
+    private func encode(_ records: [String: FavoriteSyncRecord]) -> Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return try? encoder.encode(records)
+    }
+
+    private func decode(_ data: Data?) -> [String: FavoriteSyncRecord] {
+        guard let data else { return [:] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([String: FavoriteSyncRecord].self, from: data)) ?? [:]
+    }
+}
+
+final class FavoriteSyncServer {
+    private let queue = DispatchQueue(label: "ClipboardTresor.FavoriteSyncServer")
+    private let getPayload: () -> Data?
+    private let mergePayload: (Data) -> Void
+    private var listener: NWListener?
+
+    init(getPayload: @escaping () -> Data?, mergePayload: @escaping (Data) -> Void) {
+        self.getPayload = getPayload
+        self.mergePayload = mergePayload
+    }
+
+    func start() {
+        do {
+            let listener = try NWListener(using: .tcp)
+            listener.service = NWListener.Service(name: "ClipboardTresor", type: "_clipboardtresor._tcp")
+            listener.newConnectionHandler = { [weak self] connection in
+                self?.handle(connection)
+            }
+            listener.start(queue: queue)
+            self.listener = listener
+        } catch {
+            DebugLog.shared.write("Favorite sync server failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func handle(_ connection: NWConnection) {
+        connection.start(queue: queue)
+        receive(on: connection, buffer: Data())
+    }
+
+    private func receive(on connection: NWConnection, buffer: Data) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { [weak self] data, _, isComplete, _ in
+            guard let self else { return }
+            var request = buffer
+            if let data {
+                request.append(data)
+            }
+
+            if self.isCompleteRequest(request) || isComplete {
+                self.respond(to: request, on: connection)
+            } else {
+                self.receive(on: connection, buffer: request)
+            }
+        }
+    }
+
+    private func isCompleteRequest(_ data: Data) -> Bool {
+        guard let headerEnd = headerEndRange(in: data) else { return false }
+        let headers = String(decoding: data[..<headerEnd.lowerBound], as: UTF8.self)
+        let contentLength = headers
+            .components(separatedBy: "\r\n")
+            .first { $0.lowercased().hasPrefix("content-length:") }?
+            .split(separator: ":", maxSplits: 1)
+            .last
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { Int($0) } ?? 0
+        return data.count >= headerEnd.upperBound + contentLength
+    }
+
+    private func respond(to request: Data, on connection: NWConnection) {
+        if let body = requestBody(from: request), !body.isEmpty {
+            mergePayload(body)
+        }
+
+        let body = getPayload() ?? Data("{}".utf8)
+        let header = """
+        HTTP/1.1 200 OK\r
+        Content-Type: application/json\r
+        Content-Length: \(body.count)\r
+        Connection: close\r
+        \r
+        """
+        var response = Data(header.utf8)
+        response.append(body)
+        connection.send(content: response, completion: .contentProcessed { _ in
+            connection.cancel()
+        })
+    }
+
+    private func requestBody(from data: Data) -> Data? {
+        guard let headerEnd = headerEndRange(in: data) else { return nil }
+        return data.suffix(from: headerEnd.upperBound)
+    }
+
+    private func headerEndRange(in data: Data) -> Range<Data.Index>? {
+        let marker = Data("\r\n\r\n".utf8)
+        return data.range(of: marker)
+    }
+}
+
 final class DebugLog {
     static let shared = DebugLog()
 
@@ -265,6 +447,10 @@ final class ClipboardStore: ObservableObject {
     private var skippedChangeCount: Int?
     private var lastSignature: String?
     private var timer: Timer?
+    private let favoriteSyncStore = FavoriteSyncStore()
+    private var contentSignatureCache: [String: String] = [:]
+    private var lastFavoriteSyncRefresh = Date.distantPast
+    private var favoriteSyncServer: FavoriteSyncServer?
 
     private let folderFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -294,6 +480,9 @@ final class ClipboardStore: ObservableObject {
         load()
         createFolders()
         migrateExistingEntriesForSecurity()
+        publishCurrentFavoritesIfNeeded()
+        applyFavoriteSyncRecords()
+        startFavoriteSyncServer()
         lastIndexModifiedAt = indexModificationDate()
     }
 
@@ -391,6 +580,8 @@ final class ClipboardStore: ObservableObject {
     }
 
     func toggleFavorite(_ entry: ClipEntry) {
+        load()
+        applyFavoriteSyncRecords(saveIfChanged: false)
         guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
         let newValue = !(entries[index].isFavorite == true)
         entries[index].isFavorite = newValue
@@ -398,15 +589,20 @@ final class ClipboardStore: ObservableObject {
             entries[index].favoriteShortcut = nil
         }
         saveIndex()
+        pushFavoriteState(for: entries[index])
         lastStatus = newValue ? "Zu Favoriten hinzugefügt" : "Aus Favoriten entfernt"
     }
 
     func setFavoriteShortcut(_ shortcut: String?, for entry: ClipEntry) {
+        load()
+        applyFavoriteSyncRecords(saveIfChanged: false)
         guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
 
+        var changedEntries: [ClipEntry] = []
         if let shortcut {
             for otherIndex in entries.indices where entries[otherIndex].favoriteShortcut == shortcut {
                 entries[otherIndex].favoriteShortcut = nil
+                changedEntries.append(entries[otherIndex])
             }
             entries[index].isFavorite = true
             entries[index].favoriteShortcut = shortcut
@@ -415,8 +611,10 @@ final class ClipboardStore: ObservableObject {
             entries[index].favoriteShortcut = nil
             lastStatus = "Shortcut entfernt"
         }
+        changedEntries.append(entries[index])
 
         saveIndex()
+        changedEntries.forEach { pushFavoriteState(for: $0) }
     }
 
     func entry(withID id: String) -> ClipEntry? {
@@ -425,6 +623,7 @@ final class ClipboardStore: ObservableObject {
 
     private func pollPasteboard() {
         refreshFromExternalIndexIfNeeded()
+        refreshFavoritesFromSyncIfNeeded()
 
         let changeCount = pasteboard.changeCount
         guard changeCount != lastChangeCount else { return }
@@ -764,6 +963,7 @@ final class ClipboardStore: ObservableObject {
 
     private func add(_ entry: ClipEntry) {
         entries.insert(entry, at: 0)
+        applyFavoriteSyncRecords(saveIfChanged: false)
         saveIndex()
         lastStatus = "Gespeichert: \(entry.displayLabel)"
     }
@@ -1000,11 +1200,105 @@ final class ClipboardStore: ObservableObject {
 
         let oldEntries = entries
         load()
+        publishCurrentFavoritesIfNeeded()
+        applyFavoriteSyncRecords(saveIfChanged: false)
         lastIndexModifiedAt = modifiedAt
 
         if oldEntries != entries {
             onExternalReload?()
         }
+    }
+
+    private func refreshFavoritesFromSyncIfNeeded() {
+        guard Date().timeIntervalSince(lastFavoriteSyncRefresh) >= 2 else { return }
+        lastFavoriteSyncRefresh = Date()
+
+        if applyFavoriteSyncRecords() {
+            onExternalReload?()
+        }
+    }
+
+    private func publishCurrentFavoritesIfNeeded() {
+        let records = entries.compactMap { entry -> FavoriteSyncRecord? in
+            guard entry.isFavorite == true,
+                  let signature = contentSignature(for: entry) else { return nil }
+            return FavoriteSyncRecord(
+                signature: signature,
+                isFavorite: true,
+                favoriteShortcut: entry.favoriteShortcut
+            )
+        }
+        favoriteSyncStore.seedMissing(records)
+    }
+
+    @discardableResult
+    private func applyFavoriteSyncRecords(saveIfChanged: Bool = true) -> Bool {
+        let records = favoriteSyncStore.records()
+        guard !records.isEmpty else { return false }
+
+        var changed = false
+        for index in entries.indices {
+            guard let signature = contentSignature(for: entries[index]),
+                  let record = records[signature] else { continue }
+            let syncedShortcut = record.isFavorite ? record.favoriteShortcut : nil
+
+            if entries[index].isFavorite != record.isFavorite {
+                entries[index].isFavorite = record.isFavorite
+                changed = true
+            }
+            if entries[index].favoriteShortcut != syncedShortcut {
+                entries[index].favoriteShortcut = syncedShortcut
+                changed = true
+            }
+        }
+
+        if changed && saveIfChanged {
+            saveIndex()
+        }
+        return changed
+    }
+
+    private func pushFavoriteState(for entry: ClipEntry) {
+        guard let signature = contentSignature(for: entry) else { return }
+        favoriteSyncStore.upsert(
+            signature: signature,
+            isFavorite: entry.isFavorite == true,
+            favoriteShortcut: entry.favoriteShortcut
+        )
+    }
+
+    private func favoriteSyncPayload() -> Data? {
+        publishCurrentFavoritesIfNeeded()
+        return favoriteSyncStore.encodedRecords()
+    }
+
+    private func mergeFavoriteSyncPayload(_ data: Data) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if self.favoriteSyncStore.mergeEncodedRecords(data), self.applyFavoriteSyncRecords() {
+                self.onExternalReload?()
+            }
+        }
+    }
+
+    private func startFavoriteSyncServer() {
+        favoriteSyncServer = FavoriteSyncServer(
+            getPayload: { [weak self] in self?.favoriteSyncPayload() },
+            mergePayload: { [weak self] data in self?.mergeFavoriteSyncPayload(data) }
+        )
+        favoriteSyncServer?.start()
+    }
+
+    private func contentSignature(for entry: ClipEntry) -> String? {
+        if let cached = contentSignatureCache[entry.id] {
+            return cached
+        }
+        guard let data = try? SecureStorage.shared.readData(from: entry.url) else { return nil }
+        let digest = SHA256.hash(data: data)
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        let signature = "\(entry.kind.rawValue):\(hex)"
+        contentSignatureCache[entry.id] = signature
+        return signature
     }
 
     private func indexModificationDate() -> Date? {

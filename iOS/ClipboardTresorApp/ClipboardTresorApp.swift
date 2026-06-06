@@ -1,5 +1,6 @@
 import ClipboardCore
 import LocalAuthentication
+import Network
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -35,12 +36,20 @@ final class ArchiveListViewModel: ObservableObject {
     @Published var isUnlocked = false
 
     private let repository: ClipboardArchiveRepository
+    private let favoriteLANSync: FavoriteLANSyncClient
     private var lastSeenPasteboardChangeCount: Int?
     private var lastImportedSignature: String?
 
     init(repository: ClipboardArchiveRepository) {
         self.repository = repository
+        self.favoriteLANSync = FavoriteLANSyncClient(repository: repository)
         entries = repository.entries
+        favoriteLANSync.onMerged = { [weak self] in
+            Task { @MainActor in
+                self?.refreshFromArchive()
+            }
+        }
+        favoriteLANSync.start()
     }
 
     var filteredEntries: [ClipEntry] {
@@ -70,6 +79,7 @@ final class ArchiveListViewModel: ObservableObject {
 
     func refreshFromArchive() {
         guard isUnlocked else { return }
+        favoriteLANSync.syncOnce()
         let reloaded = repository.reload()
         if reloaded != entries {
             entries = reloaded
@@ -146,6 +156,7 @@ final class ArchiveListViewModel: ObservableObject {
 
     func toggleFavorite(_ entry: ClipEntry) {
         try? repository.toggleFavorite(entry)
+        favoriteLANSync.syncOnce()
         refresh(status: entry.isFavorite == true ? "Aus Favoriten entfernt" : "Zu Favoriten hinzugefügt")
     }
 
@@ -178,6 +189,127 @@ final class ArchiveListViewModel: ObservableObject {
             hash &*= 1_099_511_628_211
         }
         return hash
+    }
+}
+
+final class FavoriteLANSyncClient: @unchecked Sendable {
+    var onMerged: (() -> Void)?
+
+    private let repository: ClipboardArchiveRepository
+    private let queue = DispatchQueue(label: "ClipboardTresor.FavoriteLANSyncClient")
+    private var browser: NWBrowser?
+    private var endpoint: NWEndpoint?
+    private var isSyncing = false
+
+    init(repository: ClipboardArchiveRepository) {
+        self.repository = repository
+    }
+
+    func start() {
+        let browser = NWBrowser(for: .bonjour(type: "_clipboardtresor._tcp", domain: nil), using: .tcp)
+        browser.browseResultsChangedHandler = { [weak self] results, _ in
+            guard let client = self else { return }
+            client.queue.async {
+                client.endpoint = results.first?.endpoint
+            }
+        }
+        browser.start(queue: queue)
+        self.browser = browser
+    }
+
+    func syncOnce() {
+        guard let payload = repository.favoriteSyncPayload() else { return }
+
+        queue.async { [weak self] in
+            guard let self, !self.isSyncing, let endpoint = self.endpoint else { return }
+            self.isSyncing = true
+            self.sync(payload: payload, endpoint: endpoint)
+        }
+    }
+
+    private func sync(payload: Data, endpoint: NWEndpoint) {
+        let connection = NWConnection(to: endpoint, using: .tcp)
+        connection.stateUpdateHandler = { [weak self, weak connection] state in
+            guard let self, let connection else { return }
+            if case .ready = state {
+                self.send(payload: payload, on: connection)
+            } else if case .failed = state {
+                self.finish(connection)
+            }
+        }
+        connection.start(queue: queue)
+    }
+
+    private func send(payload: Data, on connection: NWConnection) {
+        let header = """
+        POST /favorites HTTP/1.1\r
+        Host: ClipboardTresor.local\r
+        Content-Type: application/json\r
+        Content-Length: \(payload.count)\r
+        Connection: close\r
+        \r
+        """
+        var request = Data(header.utf8)
+        request.append(payload)
+        connection.send(content: request, completion: .contentProcessed { [weak self, weak connection] error in
+            guard let self, let connection else { return }
+            if error != nil {
+                self.finish(connection)
+                return
+            }
+            self.receive(on: connection, buffer: Data())
+        })
+    }
+
+    private func receive(on connection: NWConnection, buffer: Data) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { [weak self] data, _, isComplete, _ in
+            guard let self else { return }
+            var response = buffer
+            if let data {
+                response.append(data)
+            }
+
+            if self.isCompleteResponse(response) || isComplete {
+                if let body = self.responseBody(from: response), !body.isEmpty {
+                    DispatchQueue.main.async { [weak self] in
+                        if self?.repository.mergeFavoriteSyncPayload(body) == true {
+                            self?.onMerged?()
+                        }
+                    }
+                }
+                self.finish(connection)
+            } else {
+                self.receive(on: connection, buffer: response)
+            }
+        }
+    }
+
+    private func finish(_ connection: NWConnection) {
+        connection.cancel()
+        isSyncing = false
+    }
+
+    private func isCompleteResponse(_ data: Data) -> Bool {
+        guard let headerEnd = headerEndRange(in: data) else { return false }
+        let headers = String(decoding: data[..<headerEnd.lowerBound], as: UTF8.self)
+        let contentLength = headers
+            .components(separatedBy: "\r\n")
+            .first { $0.lowercased().hasPrefix("content-length:") }?
+            .split(separator: ":", maxSplits: 1)
+            .last
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { Int($0) } ?? 0
+        return data.count >= headerEnd.upperBound + contentLength
+    }
+
+    private func responseBody(from data: Data) -> Data? {
+        guard let headerEnd = headerEndRange(in: data) else { return nil }
+        return data.suffix(from: headerEnd.upperBound)
+    }
+
+    private func headerEndRange(in data: Data) -> Range<Data.Index>? {
+        let marker = Data("\r\n\r\n".utf8)
+        return data.range(of: marker)
     }
 }
 
