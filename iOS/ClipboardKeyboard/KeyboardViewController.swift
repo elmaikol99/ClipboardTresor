@@ -35,6 +35,9 @@ final class KeyboardViewController: KeyboardInputViewController {
     }
 
     override func viewWillSetupKeyboardView() {
+        state.keyboardContext.autocapitalizationTypeOverride = Keyboard.AutocapitalizationType.none
+        state.keyboardContext.keyboardCase = .lowercased
+
         setupKeyboardView { [weak self] controller in
             ClipboardTresorKeyboardView(
                 services: controller.services,

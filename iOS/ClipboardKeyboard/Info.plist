@@ -18,6 +18,12 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_clipboardtresor._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>ClipboardTresor Keyboard sucht deine Mac-App im lokalen Netzwerk, um Favoriten zu synchronisieren.</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>
