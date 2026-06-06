@@ -404,12 +404,7 @@ struct ArchiveListView: View {
         .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(AppTheme.stroke)
-                .frame(height: 1)
-        }
+        .background(Color.clear)
     }
 
     private var scopeTabs: some View {

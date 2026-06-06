@@ -86,6 +86,8 @@ private struct ClipboardTresorKeyboardView: View {
 }
 
 private struct ClipboardFavoritesToolbar: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     @ObservedObject var keyboardContext: KeyboardContext
     let repository: ClipboardArchiveRepository?
     let insertText: (String) -> Void
@@ -122,6 +124,10 @@ private struct ClipboardFavoritesToolbar: View {
                                 .frame(height: 28)
                                 .background(.ultraThinMaterial)
                                 .clipShape(Capsule())
+                                .overlay {
+                                    Capsule()
+                                        .stroke(favoriteChipBorderColor, lineWidth: colorScheme == .dark ? 0.5 : 1)
+                                }
                             }
                             .buttonStyle(.plain)
                         }
@@ -131,9 +137,11 @@ private struct ClipboardFavoritesToolbar: View {
             }
 
             Link(destination: URL(string: "clipboardtresor://")!) {
-                Image(systemName: "app.badge")
-                    .font(.system(size: 16))
-                    .foregroundStyle(.secondary)
+                Image("KeyboardAppIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 22, height: 22)
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                     .frame(width: 32, height: 32)
                     .contentShape(Rectangle())
             }
@@ -153,6 +161,10 @@ private struct ClipboardFavoritesToolbar: View {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
+    }
+
+    private var favoriteChipBorderColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.18)
     }
 
     private func reloadFavorites() {
