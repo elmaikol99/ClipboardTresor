@@ -1,8 +1,10 @@
-# ClipboardArchiv
+# ClipboardTresor
 
-ClipboardArchiv is a native macOS clipboard history app. It saves copied text, images, and rich clipboard data locally, then lets you reopen your archive by holding `Command+C`.
+ClipboardTresor is a native macOS clipboard history app. It saves copied text, images, and rich clipboard data locally, then lets you reopen your archive by holding `Command+C`.
 
 It is built for everyday work in Confluence, Jira, browsers, documents, and similar tools where clipboard data can contain links, formatted text, mentions, due dates, action items, or images.
+
+The current macOS app target is still named `ClipboardArchiv.app` internally. The iOS work is being added under the ClipboardTresor name.
 
 ## Features
 
@@ -23,13 +25,13 @@ It is built for everyday work in Confluence, Jira, browsers, documents, and simi
 
 ## Rich Clipboard
 
-ClipboardArchiv saves more than plain text when the source app places rich data on the macOS pasteboard. This is useful for Confluence and Jira content such as links, formatted snippets, mentions, action items, and due dates.
+ClipboardTresor saves more than plain text when the source app places rich data on the macOS pasteboard. This is useful for Confluence and Jira content such as links, formatted snippets, mentions, action items, and due dates.
 
-Some apps do not place the full original data on the pasteboard. For example, a Confluence image copy may contain rich HTML or Atlassian metadata, but not always the actual image pixels. In that case ClipboardArchiv can preserve and restore the rich payload it received, but it cannot recreate an image that was never provided by macOS. If real image data is present, the app stores a preview and supports dragging the image out of the archive.
+Some apps do not place the full original data on the pasteboard. For example, a Confluence image copy may contain rich HTML or Atlassian metadata, but not always the actual image pixels. In that case ClipboardTresor can preserve and restore the rich payload it received, but it cannot recreate an image that was never provided by macOS. If real image data is present, the app stores a preview and supports dragging the image out of the archive.
 
 ## Security
 
-ClipboardArchiv stores archive data locally and encrypts it at rest:
+ClipboardTresor stores archive data locally and encrypts it at rest:
 
 - Archive files are encrypted with AES-GCM.
 - The encryption key is stored in the macOS Keychain.
@@ -39,7 +41,7 @@ ClipboardArchiv stores archive data locally and encrypts it at rest:
 - The archive auto-locks after 10 minutes.
 - A manual lock action is available from the app menu.
 
-ClipboardArchiv is not a password manager. It protects stored archive files, but anything currently on the system clipboard can still be read by apps that macOS allows to access the clipboard.
+ClipboardTresor is not a password manager. It protects stored archive files, but anything currently on the system clipboard can still be read by apps that macOS allows to access the clipboard.
 
 Temporary decrypted files are created only when dragging an image out of the app. They are cleaned up on app start and scheduled for deletion after a few minutes.
 
@@ -48,6 +50,7 @@ Temporary decrypted files are created only when dragging an image out of the app
 - macOS
 - Swift command line tools
 - Optional but recommended: an Apple Development signing identity
+- Xcode for iOS app, Keyboard extension, Share extension, signing, and App Groups
 
 Check Swift:
 
@@ -55,17 +58,41 @@ Check Swift:
 swift --version
 ```
 
+## iOS Work
+
+The iOS implementation has started in:
+
+```text
+iOS/
+Shared/ClipboardCore/
+```
+
+Current iOS architecture:
+
+- `Shared/ClipboardCore`: reusable encrypted archive model, storage, Keychain, and index handling.
+- `iOS/ClipboardTresorApp`: SwiftUI app skeleton for archive browsing, search, favorites, Face ID unlock, and user-triggered clipboard import.
+- `iOS/ClipboardKeyboard`: Custom Keyboard extension skeleton for inserting favorite text snippets.
+- `iOS/ClipboardShareExtension`: Share extension skeleton for saving text, URLs, and images from other apps.
+
+Build the shared core:
+
+```bash
+swift build --package-path Shared/ClipboardCore
+```
+
+To build the iOS app itself, install Xcode, create the iOS app and extension targets, add `Shared/ClipboardCore` as a local Swift package dependency, and enable the App Group listed in [iOS/README.md](iOS/README.md).
+
 ## Build
 
 ```bash
-cd ~/Desktop/ClipboardArchiv
+cd ~/Desktop/ClipboardTresor
 ./build.sh
 ```
 
 The app is created here:
 
 ```text
-~/Desktop/ClipboardArchiv/build/ClipboardArchiv.app
+~/Desktop/ClipboardTresor/build/ClipboardArchiv.app
 ```
 
 The build script signs the app with the first available `Apple Development:` identity. If none is available, it falls back to ad-hoc signing.
@@ -73,7 +100,7 @@ The build script signs the app with the first available `Apple Development:` ide
 ## Start
 
 ```bash
-open ~/Desktop/ClipboardArchiv/build/ClipboardArchiv.app
+open ~/Desktop/ClipboardTresor/build/ClipboardArchiv.app
 ```
 
 Restart after rebuilding:
@@ -110,7 +137,7 @@ By default, ClipboardArchiv stores data in:
 Choose another parent folder:
 
 ```bash
-cd ~/Desktop/ClipboardArchiv
+cd ~/Desktop/ClipboardTresor
 ./configure-archive-folder.sh "/path/to/parent-folder"
 ```
 
