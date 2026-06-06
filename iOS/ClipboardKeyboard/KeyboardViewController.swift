@@ -1,4 +1,5 @@
 import ClipboardCore
+import SwiftUI
 import UIKit
 
 private let appGroupIdentifier = "group.local.clipboardtresor"
@@ -15,6 +16,7 @@ final class KeyboardViewController: UIInputViewController {
     private let barView = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
     private let favoriteScrollView = UIScrollView()
     private let favoriteStack = UIStackView()
+    private var appLinkHostingController: UIHostingController<KeyboardAppLinkView>?
     private var refreshTimer: Timer?
     private var lastFavoriteSignature: String?
 
@@ -47,8 +49,7 @@ final class KeyboardViewController: UIInputViewController {
         globeButton.addTarget(self, action: #selector(nextKeyboardTapped), for: .touchUpInside)
         globeButton.addTarget(self, action: #selector(nextKeyboardTouchDown(_:event:)), for: .touchDown)
 
-        let appButton = iconButton(systemName: "app.badge")
-        appButton.addTarget(self, action: #selector(openApp), for: .touchUpInside)
+        let appButton = appLinkView()
 
         favoriteScrollView.showsHorizontalScrollIndicator = false
         favoriteScrollView.alwaysBounceHorizontal = true
@@ -153,6 +154,16 @@ final class KeyboardViewController: UIInputViewController {
         return button
     }
 
+    private func appLinkView() -> UIView {
+        let hostingController = UIHostingController(rootView: KeyboardAppLinkView())
+        hostingController.view.backgroundColor = .clear
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        addChild(hostingController)
+        hostingController.didMove(toParent: self)
+        appLinkHostingController = hostingController
+        return hostingController.view
+    }
+
     private func placeholderLabel(_ text: String) -> UILabel {
         let label = UILabel()
         label.text = text
@@ -177,34 +188,26 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    @objc private func openApp() {
-        guard let url = URL(string: "clipboardtresor://") else { return }
-        extensionContext?.open(url, completionHandler: { [weak self] didOpen in
-            guard !didOpen else { return }
-            DispatchQueue.main.async {
-                self?.openAppThroughResponderChain(url)
-            }
-        })
-    }
-
-    private func openAppThroughResponderChain(_ url: URL) {
-        let selector = NSSelectorFromString("openURL:")
-        var responder: UIResponder? = self
-
-        while let currentResponder = responder {
-            if currentResponder.responds(to: selector) {
-                currentResponder.perform(selector, with: url)
-                return
-            }
-            responder = currentResponder.next
-        }
-    }
-
     @objc private func nextKeyboardTapped() {
         advanceToNextInputMode()
     }
 
     @objc private func nextKeyboardTouchDown(_ sender: UIButton, event: UIEvent) {
         handleInputModeList(from: sender, with: event)
+    }
+}
+
+private struct KeyboardAppLinkView: View {
+    private let appURL = URL(string: "clipboardtresor://")!
+
+    var body: some View {
+        Link(destination: appURL) {
+            Image(systemName: "app.badge")
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(Color(uiColor: .secondaryLabel))
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
