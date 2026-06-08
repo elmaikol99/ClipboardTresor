@@ -287,6 +287,7 @@ struct ArchiveSyncItem: Codable {
     let displayKind: String?
     let richPreviewData: Data?
     let favoriteShortcut: String?
+    let title: String?
 }
 
 struct ArchiveSyncPayload: Codable {
@@ -470,6 +471,7 @@ struct ClipEntry: Identifiable, Codable, Equatable {
     var displayKind: String?
     var richPreviewPath: String?
     var favoriteShortcut: String?
+    var title: String?
 
     var url: URL {
         URL(fileURLWithPath: filePath)
@@ -477,6 +479,14 @@ struct ClipEntry: Identifiable, Codable, Equatable {
 
     var displayLabel: String {
         displayKind ?? (kind == .text ? "Text" : "Bild")
+    }
+
+    var displayTitle: String {
+        if let trimmedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !trimmedTitle.isEmpty {
+            return trimmedTitle
+        }
+        return displayLabel
     }
 
     var displaySystemImage: String {
@@ -689,6 +699,15 @@ final class ClipboardStore: ObservableObject {
         changedEntries.forEach { pushFavoriteState(for: $0) }
     }
 
+    func setTitle(_ title: String?, for entry: ClipEntry) {
+        load()
+        guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
+        entries[index].title = Self.normalizedTitle(title)
+        saveIndex()
+        onExternalReload?()
+        lastStatus = entries[index].title == nil ? "Name entfernt" : "Name geändert"
+    }
+
     func entry(withID id: String) -> ClipEntry? {
         entries.first { $0.id == id }
     }
@@ -762,7 +781,8 @@ final class ClipboardStore: ObservableObject {
                 isSensitive: false,
                 displayKind: displayKind,
                 richPreviewPath: richPreviewPath,
-                favoriteShortcut: nil
+                favoriteShortcut: nil,
+                title: nil
             )
             add(entry)
         } catch {
@@ -795,7 +815,8 @@ final class ClipboardStore: ObservableObject {
                 isSensitive: false,
                 displayKind: nil,
                 richPreviewPath: nil,
-                favoriteShortcut: nil
+                favoriteShortcut: nil,
+                title: nil
             )
             add(entry)
         } catch {
@@ -1037,11 +1058,11 @@ final class ClipboardStore: ObservableObject {
         entries.insert(entry, at: 0)
         applyFavoriteSyncRecords(saveIfChanged: false)
         saveIndex()
-        lastStatus = "Gespeichert: \(entry.displayLabel)"
+        lastStatus = "Gespeichert: \(entry.displayTitle)"
     }
 
     private func setCopiedStatus(for entry: ClipEntry) {
-        lastStatus = "\(entry.displayLabel) \(statusDateFormatter.string(from: entry.createdAt)) - in Zwischenablage kopiert"
+        lastStatus = "\(entry.displayTitle) \(statusDateFormatter.string(from: entry.createdAt)) - in Zwischenablage kopiert"
     }
 
     private func updateSignatureAfterCopying(_ entry: ClipEntry) {
@@ -1370,7 +1391,8 @@ final class ClipboardStore: ObservableObject {
                     isFavorite: entry.isFavorite,
                     displayKind: entry.displayKind,
                     richPreviewData: richPreviewData,
-                    favoriteShortcut: entry.favoriteShortcut
+                    favoriteShortcut: entry.favoriteShortcut,
+                    title: entry.title
                 )
             )
             totalBytes += itemBytes
@@ -1419,6 +1441,12 @@ final class ClipboardStore: ObservableObject {
         }
         contentSignatureCache[entry.id] = signatures
         return signatures
+    }
+
+    private static func normalizedTitle(_ title: String?) -> String? {
+        guard let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        return trimmed
     }
 
     private func indexModificationDate() -> Date? {
@@ -1894,11 +1922,14 @@ struct HistoryView: View {
     let onDelete: (ClipEntry) -> Void
     let onToggleFavorite: (ClipEntry) -> Void
     let onSetShortcut: (ClipEntry, String?) -> Void
+    let onRename: (ClipEntry, String?) -> Void
     let onOpenFolder: () -> Void
     let onUnlock: () -> Void
 
     @State private var searchText = ""
     @State private var selectedScope: HistoryScope = .all
+    @State private var renameTarget: ClipEntry?
+    @State private var renameText = ""
 
     private var filteredEntries: [ClipEntry] {
         let scopedEntries: [ClipEntry]
@@ -1913,6 +1944,7 @@ struct HistoryView: View {
         guard !query.isEmpty else { return scopedEntries }
         return scopedEntries.filter { entry in
             entry.preview.lowercased().contains(query) ||
+            entry.displayTitle.lowercased().contains(query) ||
             entry.displayLabel.lowercased().contains(query) ||
             entry.kind.rawValue.contains(query) ||
             Self.dateFormatter.string(from: entry.createdAt).lowercased().contains(query)
@@ -1945,7 +1977,8 @@ struct HistoryView: View {
                                 onReveal: { onReveal(entry) },
                                 onDelete: { onDelete(entry) },
                                 onToggleFavorite: { onToggleFavorite(entry) },
-                                onSetShortcut: { shortcut in onSetShortcut(entry, shortcut) }
+                                onSetShortcut: { shortcut in onSetShortcut(entry, shortcut) },
+                                onRename: { beginRename(entry) }
                             )
                             .id(entry.id)
                             .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
@@ -1957,8 +1990,19 @@ struct HistoryView: View {
                     }
                 }
                 Divider()
-                footer
-            }
+            footer
+        }
+        .sheet(item: $renameTarget) { entry in
+            RenameEntrySheet(
+                title: $renameText,
+                entry: entry,
+                onCancel: { renameTarget = nil },
+                onSave: {
+                    onRename(entry, renameText)
+                    renameTarget = nil
+                }
+            )
+        }
     }
 
     private var lockedBody: some View {
@@ -2047,6 +2091,39 @@ struct HistoryView: View {
         formatter.dateFormat = "dd.MM.yyyy HH:mm:ss"
         return formatter
     }()
+
+    private func beginRename(_ entry: ClipEntry) {
+        renameText = entry.title ?? ""
+        renameTarget = entry
+    }
+}
+
+struct RenameEntrySheet: View {
+    @Binding var title: String
+    let entry: ClipEntry
+    let onCancel: () -> Void
+    let onSave: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Name bearbeiten")
+                .font(.headline)
+            Text(entry.preview)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            TextField(entry.displayLabel, text: $title)
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button("Abbrechen", action: onCancel)
+                Button("Speichern", action: onSave)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 360)
+    }
 }
 
 struct ClipRow: View {
@@ -2056,6 +2133,7 @@ struct ClipRow: View {
     let onDelete: () -> Void
     let onToggleFavorite: () -> Void
     let onSetShortcut: (String?) -> Void
+    let onRename: () -> Void
 
     private var richDragProvider: NSItemProvider {
         let provider = NSItemProvider()
@@ -2090,7 +2168,7 @@ struct ClipRow: View {
 
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 8) {
-                        Label(entry.displayLabel, systemImage: entry.displaySystemImage)
+                        Label(entry.displayTitle, systemImage: entry.displaySystemImage)
                             .font(.system(size: 12, weight: .semibold))
                         Text(HistoryView.dateFormatter.string(from: entry.createdAt))
                             .font(.system(size: 12))
@@ -2145,6 +2223,11 @@ struct ClipRow: View {
                     Image(systemName: "doc.on.doc")
                 }
                 .help("Kopieren")
+
+                Button(action: onRename) {
+                    Image(systemName: "pencil")
+                }
+                .help("Name bearbeiten")
 
                 Button(action: onReveal) {
                     Image(systemName: "magnifyingglass")
@@ -2332,6 +2415,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.lockController.markActivity()
                 self?.store.setFavoriteShortcut(shortcut, for: entry)
                 self?.refreshFavoriteShortcuts()
+            },
+            onRename: { [weak self] entry, title in
+                self?.lockController.markActivity()
+                self?.store.setTitle(title, for: entry)
             },
             onOpenFolder: { [weak self] in
                 self?.lockController.markActivity()

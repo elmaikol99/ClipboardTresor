@@ -15,6 +15,7 @@ The current macOS app target is still named `ClipboardArchiv.app` internally. Th
 - Opens the archive window by holding `Command+C`.
 - Does not open on `Command+Shift+V`.
 - Shows `Alle` and `Favoriten` tabs.
+- Lets you rename archive entries without changing the copied content.
 - Lets you mark entries as favorites.
 - Lets you assign favorite shortcuts from `Command+1` to `Command+9`.
 - Pastes a favorite into the active app with its shortcut.

@@ -66,6 +66,7 @@ final class ArchiveListViewModel: ObservableObject {
         guard !query.isEmpty else { return scoped }
         return scoped.filter {
             $0.preview.lowercased().contains(query) ||
+            $0.displayTitle.lowercased().contains(query) ||
             $0.displayLabel.lowercased().contains(query)
         }
     }
@@ -156,7 +157,7 @@ final class ArchiveListViewModel: ObservableObject {
                     UIPasteboard.general.image = image
                 }
             }
-            statusText = "\(entry.displayLabel) kopiert"
+            statusText = "\(entry.displayTitle) kopiert"
         } catch {
             statusText = "Eintrag konnte nicht kopiert werden"
         }
@@ -171,6 +172,15 @@ final class ArchiveListViewModel: ObservableObject {
     func delete(_ entry: ClipEntry) {
         repository.delete(entry)
         refresh(status: "Eintrag gelöscht")
+    }
+
+    func rename(_ entry: ClipEntry, title: String?) {
+        do {
+            try repository.setTitle(title, for: entry)
+            refresh(status: "Name geändert")
+        } catch {
+            statusText = "Name konnte nicht geändert werden"
+        }
     }
 
     private func refresh(status: String) {
@@ -411,6 +421,8 @@ struct ArchiveListView: View {
     @ObservedObject var viewModel: ArchiveListViewModel
     @Environment(\.scenePhase) private var scenePhase
     private let archiveRefreshTimer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
+    @State private var renameTarget: ClipEntry?
+    @State private var renameText = ""
 
     var body: some View {
         NavigationStack {
@@ -452,6 +464,8 @@ struct ArchiveListView: View {
                         viewModel.copy(entry)
                     } onFavorite: {
                         viewModel.toggleFavorite(entry)
+                    } onRename: {
+                        beginRename(entry)
                     } onDelete: {
                         viewModel.delete(entry)
                     }
@@ -467,6 +481,20 @@ struct ArchiveListView: View {
             statusBar
         }
         .background(AppTheme.background)
+        .alert("Name bearbeiten", isPresented: renameAlertBinding) {
+            TextField(renameTarget?.displayLabel ?? "Name", text: $renameText)
+            Button("Abbrechen", role: .cancel) {
+                renameTarget = nil
+            }
+            Button("Speichern") {
+                if let renameTarget {
+                    viewModel.rename(renameTarget, title: renameText)
+                }
+                renameTarget = nil
+            }
+        } message: {
+            Text(renameTarget?.preview ?? "")
+        }
     }
 
     private var topBar: some View {
@@ -556,12 +584,29 @@ struct ArchiveListView: View {
         }
         .padding(24)
     }
+
+    private var renameAlertBinding: Binding<Bool> {
+        Binding(
+            get: { renameTarget != nil },
+            set: { isPresented in
+                if !isPresented {
+                    renameTarget = nil
+                }
+            }
+        )
+    }
+
+    private func beginRename(_ entry: ClipEntry) {
+        renameText = entry.title ?? ""
+        renameTarget = entry
+    }
 }
 
 struct ArchiveRow: View {
     let entry: ClipEntry
     let onCopy: () -> Void
     let onFavorite: () -> Void
+    let onRename: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -576,7 +621,7 @@ struct ArchiveRow: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(entry.displayLabel)
+                        Text(entry.displayTitle)
                             .font(.subheadline.weight(.semibold))
                         Text(entry.createdAt, format: .dateTime.day().month().year().hour().minute())
                             .font(.caption)
@@ -596,6 +641,13 @@ struct ArchiveRow: View {
                         .frame(width: 34, height: 34)
                 }
                 .buttonStyle(.plain)
+
+                Button(action: onRename) {
+                    Image(systemName: "pencil")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(.plain)
             }
             .padding(12)
             .background(.ultraThinMaterial)
@@ -610,6 +662,12 @@ struct ArchiveRow: View {
             Button(role: .destructive, action: onDelete) {
                 Label("Löschen", systemImage: "trash")
             }
+        }
+        .swipeActions(edge: .leading) {
+            Button(action: onRename) {
+                Label("Umbenennen", systemImage: "pencil")
+            }
+            .tint(.blue)
         }
     }
 }

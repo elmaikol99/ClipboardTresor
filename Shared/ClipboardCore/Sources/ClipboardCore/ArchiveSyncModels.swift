@@ -10,6 +10,7 @@ public struct ArchiveSyncItem: Codable, Equatable, Sendable {
     public let displayKind: String?
     public let richPreviewData: Data?
     public let favoriteShortcut: String?
+    public let title: String?
 
     public init(
         id: String,
@@ -20,7 +21,8 @@ public struct ArchiveSyncItem: Codable, Equatable, Sendable {
         isFavorite: Bool?,
         displayKind: String?,
         richPreviewData: Data?,
-        favoriteShortcut: String?
+        favoriteShortcut: String?,
+        title: String?
     ) {
         self.id = id
         self.kind = kind
@@ -31,6 +33,7 @@ public struct ArchiveSyncItem: Codable, Equatable, Sendable {
         self.displayKind = displayKind
         self.richPreviewData = richPreviewData
         self.favoriteShortcut = favoriteShortcut
+        self.title = title
     }
 }
 

@@ -115,7 +115,7 @@ private struct ClipboardFavoritesToolbar: View {
                                 HStack(spacing: 5) {
                                     Image(systemName: entry.kind == .image ? "photo" : "text.quote")
                                         .font(.caption2.weight(.semibold))
-                                    Text(entry.kind == .image ? "Bild" : entry.preview)
+                                    Text(entry.title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? entry.displayTitle : (entry.kind == .image ? "Bild" : entry.preview))
                                         .font(.caption.weight(.medium))
                                 }
                                 .lineLimit(1)

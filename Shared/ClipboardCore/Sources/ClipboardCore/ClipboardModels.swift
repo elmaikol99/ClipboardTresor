@@ -18,6 +18,7 @@ public struct ClipEntry: Identifiable, Codable, Equatable, Sendable {
     public var displayKind: String?
     public var richPreviewPath: String?
     public var favoriteShortcut: String?
+    public var title: String?
 
     public init(
         id: String,
@@ -31,7 +32,8 @@ public struct ClipEntry: Identifiable, Codable, Equatable, Sendable {
         isSensitive: Bool? = false,
         displayKind: String? = nil,
         richPreviewPath: String? = nil,
-        favoriteShortcut: String? = nil
+        favoriteShortcut: String? = nil,
+        title: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -45,6 +47,7 @@ public struct ClipEntry: Identifiable, Codable, Equatable, Sendable {
         self.displayKind = displayKind
         self.richPreviewPath = richPreviewPath
         self.favoriteShortcut = favoriteShortcut
+        self.title = title
     }
 
     public var url: URL {
@@ -53,6 +56,14 @@ public struct ClipEntry: Identifiable, Codable, Equatable, Sendable {
 
     public var displayLabel: String {
         displayKind ?? (kind == .text ? "Text" : "Bild")
+    }
+
+    public var displayTitle: String {
+        if let trimmedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !trimmedTitle.isEmpty {
+            return trimmedTitle
+        }
+        return displayLabel
     }
 
     public var richPreviewURL: URL? {

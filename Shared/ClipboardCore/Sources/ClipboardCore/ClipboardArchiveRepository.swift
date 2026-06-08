@@ -217,11 +217,26 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
         var existingSignatures = Set(entries.flatMap { contentSignatures(for: $0) })
         var importedCount = 0
 
+        var metadataChanged = false
+
         for item in items.sorted(by: { $0.createdAt < $1.createdAt }) {
-            guard !existingIDs.contains(item.id), !item.data.isEmpty else { continue }
+            if let existingIndex = entries.firstIndex(where: { $0.id == item.id }) {
+                if updateMetadata(for: existingIndex, from: item) {
+                    metadataChanged = true
+                }
+                continue
+            }
+
+            guard !item.data.isEmpty else { continue }
 
             let incomingSignatures = contentSignatures(kind: item.kind, data: item.data)
-            guard existingSignatures.isDisjoint(with: incomingSignatures) else { continue }
+            if !existingSignatures.isDisjoint(with: incomingSignatures) {
+                if let duplicateIndex = entries.firstIndex(where: { !Set(contentSignatures(for: $0)).isDisjoint(with: incomingSignatures) }),
+                   updateMetadata(for: duplicateIndex, from: item) {
+                    metadataChanged = true
+                }
+                continue
+            }
 
             do {
                 let entry = try writeSyncedItem(item)
@@ -237,9 +252,10 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
             }
         }
 
-        guard importedCount > 0 else { return 0 }
         entries.sort { $0.createdAt > $1.createdAt }
-        saveIndex()
+        if importedCount > 0 || metadataChanged {
+            saveIndex()
+        }
         publishCurrentFavoritesIfNeeded()
         applyFavoriteSyncRecords()
         return importedCount
@@ -282,6 +298,15 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
 
         saveIndex()
         changedEntries.forEach { pushFavoriteState(for: $0) }
+    }
+
+    public func setTitle(_ title: String?, for entry: ClipEntry) throws {
+        load()
+        guard let index = entries.firstIndex(where: { $0.id == entry.id }) else {
+            throw ClipboardArchiveError.entryNotFound
+        }
+        entries[index].title = Self.normalizedTitle(title)
+        saveIndex()
     }
 
     private func insertAndSave(_ entry: ClipEntry) {
@@ -331,8 +356,29 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
             isSensitive: false,
             displayKind: item.displayKind,
             richPreviewPath: richPreviewPath,
-            favoriteShortcut: item.favoriteShortcut
+            favoriteShortcut: item.favoriteShortcut,
+            title: Self.normalizedTitle(item.title)
         )
+    }
+
+    private func updateMetadata(for index: Int, from item: ArchiveSyncItem) -> Bool {
+        var changed = false
+        let normalizedTitle = Self.normalizedTitle(item.title)
+        if normalizedTitle != nil, entries[index].title != normalizedTitle {
+            entries[index].title = normalizedTitle
+            changed = true
+        }
+        if entries[index].displayKind != item.displayKind {
+            entries[index].displayKind = item.displayKind
+            changed = true
+        }
+        return changed
+    }
+
+    private static func normalizedTitle(_ title: String?) -> String? {
+        guard let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        return trimmed
     }
 
     private func dayFolder(for date: Date) -> URL {
