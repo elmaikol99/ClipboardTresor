@@ -31,7 +31,7 @@ H9YGR79DYW.local.clipboardtresor.shared
 ## MVP Behavior
 
 - The iOS app shows the encrypted archive, supports search and favorites, and imports changed clipboard content after the archive is unlocked and the app opens or returns to the foreground.
-- While unlocked, the iOS app refreshes the archive list every second and pulls recent entries from the Mac app over the local network.
+- While unlocked, the iOS app refreshes the archive list every second and periodically pulls recent entries from the Mac app over the local network.
 - The Share extension stores text, URLs, and image data from other apps.
 - Favorites are synced between Mac and iOS over the local network with Bonjour. Favorite sync sends content fingerprints, favorite state, and shortcuts.
 - Favorites are also stored on archive entries, so the iOS app and Keyboard extension see the same favorite state through the shared App Group archive.

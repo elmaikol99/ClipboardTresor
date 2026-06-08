@@ -50,6 +50,13 @@ final class ArchiveListViewModel: ObservableObject {
                 self?.refreshFromArchive()
             }
         }
+        favoriteLANSync.onArchiveImported = { [weak self] count in
+            Task { @MainActor in
+                guard let self else { return }
+                self.entries = self.repository.reload()
+                self.statusText = "\(count) Einträge vom Mac synchronisiert"
+            }
+        }
         favoriteLANSync.start()
     }
 
@@ -195,12 +202,15 @@ final class ArchiveListViewModel: ObservableObject {
 
 final class FavoriteLANSyncClient: @unchecked Sendable {
     var onMerged: (() -> Void)?
+    var onArchiveImported: ((Int) -> Void)?
 
     private let repository: ClipboardArchiveRepository
     private let queue = DispatchQueue(label: "ClipboardTresor.FavoriteLANSyncClient")
     private var browser: NWBrowser?
     private var endpoint: NWEndpoint?
     private var isSyncing = false
+    private var lastArchiveSync = Date.distantPast
+    private let archiveSyncInterval: TimeInterval = 30
 
     init(repository: ClipboardArchiveRepository) {
         self.repository = repository
@@ -279,8 +289,12 @@ final class FavoriteLANSyncClient: @unchecked Sendable {
                         }
                     }
                 }
-                connection.cancel()
-                self.fetchArchive(from: endpoint)
+                if self.shouldFetchArchive() {
+                    connection.cancel()
+                    self.fetchArchive(from: endpoint)
+                } else {
+                    self.finish(connection)
+                }
             } else {
                 self.receiveFavorites(on: connection, endpoint: endpoint, buffer: response)
             }
@@ -331,8 +345,9 @@ final class FavoriteLANSyncClient: @unchecked Sendable {
                 if let body = self.responseBody(from: response), !body.isEmpty {
                     DispatchQueue.main.async { [weak self] in
                         guard let self else { return }
-                        if self.repository.importArchiveSyncPayload(body) > 0 {
-                            self.onMerged?()
+                        let importedCount = self.repository.importArchiveSyncPayload(body)
+                        if importedCount > 0 {
+                            self.onArchiveImported?(importedCount)
                         }
                     }
                 }
@@ -341,6 +356,12 @@ final class FavoriteLANSyncClient: @unchecked Sendable {
                 self.receiveArchive(on: connection, buffer: response)
             }
         }
+    }
+
+    private func shouldFetchArchive() -> Bool {
+        guard Date().timeIntervalSince(lastArchiveSync) >= archiveSyncInterval else { return false }
+        lastArchiveSync = Date()
+        return true
     }
 
     private func finish(_ connection: NWConnection) {
