@@ -233,7 +233,7 @@ final class FavoriteLANSyncClient: @unchecked Sendable {
         connection.stateUpdateHandler = { [weak self, weak connection] state in
             guard let self, let connection else { return }
             if case .ready = state {
-                self.send(payload: payload, on: connection)
+                self.sendFavoritePayload(payload, on: connection, endpoint: endpoint)
             } else if case .failed = state {
                 self.finish(connection)
             }
@@ -241,7 +241,7 @@ final class FavoriteLANSyncClient: @unchecked Sendable {
         connection.start(queue: queue)
     }
 
-    private func send(payload: Data, on connection: NWConnection) {
+    private func sendFavoritePayload(_ payload: Data, on connection: NWConnection, endpoint: NWEndpoint) {
         let header = [
             "POST /favorites HTTP/1.1",
             "Host: ClipboardTresor.local",
@@ -259,11 +259,11 @@ final class FavoriteLANSyncClient: @unchecked Sendable {
                 self.finish(connection)
                 return
             }
-            self.receive(on: connection, buffer: Data())
+            self.receiveFavorites(on: connection, endpoint: endpoint, buffer: Data())
         })
     }
 
-    private func receive(on connection: NWConnection, buffer: Data) {
+    private func receiveFavorites(on connection: NWConnection, endpoint: NWEndpoint, buffer: Data) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { [weak self] data, _, isComplete, _ in
             guard let self else { return }
             var response = buffer
@@ -279,9 +279,66 @@ final class FavoriteLANSyncClient: @unchecked Sendable {
                         }
                     }
                 }
+                connection.cancel()
+                self.fetchArchive(from: endpoint)
+            } else {
+                self.receiveFavorites(on: connection, endpoint: endpoint, buffer: response)
+            }
+        }
+    }
+
+    private func fetchArchive(from endpoint: NWEndpoint) {
+        let connection = NWConnection(to: endpoint, using: .tcp)
+        connection.stateUpdateHandler = { [weak self, weak connection] state in
+            guard let self, let connection else { return }
+            if case .ready = state {
+                self.sendArchiveRequest(on: connection)
+            } else if case .failed = state {
+                self.finish(connection)
+            }
+        }
+        connection.start(queue: queue)
+    }
+
+    private func sendArchiveRequest(on connection: NWConnection) {
+        let request = [
+            "GET /archive HTTP/1.1",
+            "Host: ClipboardTresor.local",
+            "Connection: close",
+            "",
+            ""
+        ].joined(separator: "\r\n")
+
+        connection.send(content: Data(request.utf8), completion: .contentProcessed { [weak self, weak connection] error in
+            guard let self, let connection else { return }
+            if error != nil {
+                self.finish(connection)
+                return
+            }
+            self.receiveArchive(on: connection, buffer: Data())
+        })
+    }
+
+    private func receiveArchive(on connection: NWConnection, buffer: Data) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { [weak self] data, _, isComplete, _ in
+            guard let self else { return }
+            var response = buffer
+            if let data {
+                response.append(data)
+            }
+
+            if self.isCompleteResponse(response) || isComplete {
+                if let body = self.responseBody(from: response), !body.isEmpty {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else { return }
+                        if self.repository.importArchiveSyncPayload(body) > 0 {
+                            self.onMerged?()
+                        }
+                    }
+                }
                 self.finish(connection)
             } else {
-                self.receive(on: connection, buffer: response)
+                self.receiveArchive(on: connection, buffer: response)
             }
         }
     }

@@ -2,6 +2,7 @@ import Foundation
 
 public enum ClipboardArchiveError: Error, Sendable {
     case entryNotFound
+    case unsupportedSyncItem
 }
 
 public struct ArchiveDiagnostics: Equatable, Sendable {
@@ -201,6 +202,49 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
         return false
     }
 
+    @discardableResult
+    public func importArchiveSyncPayload(_ data: Data) -> Int {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let payload = try? decoder.decode(ArchiveSyncPayload.self, from: data) else { return 0 }
+        return importArchiveSyncItems(payload.items)
+    }
+
+    @discardableResult
+    public func importArchiveSyncItems(_ items: [ArchiveSyncItem]) -> Int {
+        load()
+        var existingIDs = Set(entries.map(\.id))
+        var existingSignatures = Set(entries.flatMap { contentSignatures(for: $0) })
+        var importedCount = 0
+
+        for item in items.sorted(by: { $0.createdAt < $1.createdAt }) {
+            guard !existingIDs.contains(item.id), !item.data.isEmpty else { continue }
+
+            let incomingSignatures = contentSignatures(kind: item.kind, data: item.data)
+            guard existingSignatures.isDisjoint(with: incomingSignatures) else { continue }
+
+            do {
+                let entry = try writeSyncedItem(item)
+                entries.append(entry)
+                existingIDs.insert(entry.id)
+                incomingSignatures.forEach { existingSignatures.insert($0) }
+                if entry.isFavorite == true {
+                    pushFavoriteState(for: entry)
+                }
+                importedCount += 1
+            } catch {
+                continue
+            }
+        }
+
+        guard importedCount > 0 else { return 0 }
+        entries.sort { $0.createdAt > $1.createdAt }
+        saveIndex()
+        publishCurrentFavoritesIfNeeded()
+        applyFavoriteSyncRecords()
+        return importedCount
+    }
+
     public func toggleFavorite(_ entry: ClipEntry) throws {
         load()
         applyFavoriteSyncRecords(saveIfChanged: false)
@@ -244,6 +288,51 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
         entries.insert(entry, at: 0)
         applyFavoriteSyncRecords(saveIfChanged: false)
         saveIndex()
+    }
+
+    private func writeSyncedItem(_ item: ArchiveSyncItem) throws -> ClipEntry {
+        switch item.kind {
+        case .text:
+            guard String(data: item.data, encoding: .utf8) != nil else {
+                throw ClipboardArchiveError.unsupportedSyncItem
+            }
+        case .image:
+            break
+        }
+
+        let dayURL = dayFolder(for: item.createdAt)
+        let fileKind = item.kind == .image ? "bild" : "text"
+        let fileExtension = item.kind == .image ? "png" : "txt"
+        let fileURL = dayURL.appendingPathComponent(
+            "\(fileFormatter.string(from: item.createdAt))_\(fileKind)_\(item.id.prefix(8)).\(fileExtension)"
+        )
+        try storage.writeEncrypted(item.data, to: fileURL)
+
+        let richPreviewPath: String?
+        if let richPreviewData = item.richPreviewData, !richPreviewData.isEmpty {
+            let previewURL = dayURL.appendingPathComponent(
+                "\(fileFormatter.string(from: item.createdAt))_rich_preview_\(item.id.prefix(8)).png"
+            )
+            try storage.writeEncrypted(richPreviewData, to: previewURL)
+            richPreviewPath = previewURL.path
+        } else {
+            richPreviewPath = nil
+        }
+
+        return ClipEntry(
+            id: item.id,
+            kind: item.kind,
+            createdAt: item.createdAt,
+            filePath: fileURL.path,
+            preview: item.preview,
+            byteCount: item.data.count,
+            pasteboardArchivePath: nil,
+            isFavorite: item.isFavorite ?? false,
+            isSensitive: false,
+            displayKind: item.displayKind,
+            richPreviewPath: richPreviewPath,
+            favoriteShortcut: item.favoriteShortcut
+        )
     }
 
     private func dayFolder(for date: Date) -> URL {
@@ -333,13 +422,18 @@ public final class ClipboardArchiveRepository: @unchecked Sendable {
             return cached
         }
         guard let data = try? storage.readData(from: entry.url) else { return [] }
-        var signatures = [ClipContentSignature.signature(kind: entry.kind, data: data)]
-        if entry.kind == .text,
+        let signatures = contentSignatures(kind: entry.kind, data: data)
+        contentSignatureCache[entry.id] = signatures
+        return signatures
+    }
+
+    private func contentSignatures(kind: ClipKind, data: Data) -> [String] {
+        var signatures = [ClipContentSignature.signature(kind: kind, data: data)]
+        if kind == .text,
            let text = String(data: data, encoding: .utf8),
            let normalizedSignature = ClipContentSignature.normalizedTextSignature(text) {
             signatures.append(normalizedSignature)
         }
-        contentSignatureCache[entry.id] = signatures
         return signatures
     }
 

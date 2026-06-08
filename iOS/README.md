@@ -31,9 +31,9 @@ H9YGR79DYW.local.clipboardtresor.shared
 ## MVP Behavior
 
 - The iOS app shows the encrypted archive, supports search and favorites, and imports changed clipboard content after the archive is unlocked and the app opens or returns to the foreground.
-- While unlocked, the iOS app refreshes the archive list every second so entries synced from the Mac appear without closing and reopening the app.
+- While unlocked, the iOS app refreshes the archive list every second and pulls recent entries from the Mac app over the local network.
 - The Share extension stores text, URLs, and image data from other apps.
-- Favorites are synced between Mac and iOS over the local network with Bonjour. The sync sends only content fingerprints, favorite state, and shortcuts.
+- Favorites are synced between Mac and iOS over the local network with Bonjour. Favorite sync sends content fingerprints, favorite state, and shortcuts.
 - Favorites are also stored on archive entries, so the iOS app and Keyboard extension see the same favorite state through the shared App Group archive.
 - The Keyboard extension uses KeyboardKit for a native-looking typing keyboard, shows a horizontal favorites toolbar, refreshes it while open, inserts text favorites directly, and has an app button that opens ClipboardTresor through `clipboardtresor://`.
 - Image favorites from the Keyboard are copied to `UIPasteboard.general`; the user then pastes manually.
@@ -60,7 +60,7 @@ Full Access is required so the Keyboard extension can read the shared encrypted 
 - iOS does not allow a third-party app to add a bar above Apple's standard keyboard or embed Apple's keyboard. ClipboardTresor therefore uses KeyboardKit to render a native-looking custom keyboard below the favorites toolbar.
 - ClipboardTresor can import copied content when the iOS app becomes active, but it cannot observe every copy while it is fully in the background.
 - iOS can show a paste privacy prompt when ClipboardTresor reads clipboard content from another app. To reduce repeated prompts, set `Settings > Apps > ClipboardTresor > Paste from Other Apps > Allow` when available.
-- iOS will ask for local network access the first time favorite sync looks for the Mac app. Allow it, otherwise Mac/iPhone favorite sync cannot work.
+- iOS will ask for local network access the first time sync looks for the Mac app. Allow it, otherwise Mac/iPhone sync cannot work.
 - Custom keyboards cannot type into secure text fields.
 - Some apps can block custom keyboards.
 - Custom keyboards are best for frequently reused text snippets, not full rich-content insertion.

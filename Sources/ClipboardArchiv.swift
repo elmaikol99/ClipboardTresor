@@ -277,15 +277,38 @@ enum ClipContentSignature {
     }
 }
 
+struct ArchiveSyncItem: Codable {
+    let id: String
+    let kind: ClipKind
+    let createdAt: Date
+    let preview: String
+    let data: Data
+    let isFavorite: Bool?
+    let displayKind: String?
+    let richPreviewData: Data?
+    let favoriteShortcut: String?
+}
+
+struct ArchiveSyncPayload: Codable {
+    let generatedAt: Date
+    let items: [ArchiveSyncItem]
+}
+
 final class FavoriteSyncServer {
     private let queue = DispatchQueue(label: "ClipboardTresor.FavoriteSyncServer")
     private let getPayload: () -> Data?
     private let mergePayload: (Data) -> Void
+    private let getArchivePayload: () -> Data?
     private var listener: NWListener?
 
-    init(getPayload: @escaping () -> Data?, mergePayload: @escaping (Data) -> Void) {
+    init(
+        getPayload: @escaping () -> Data?,
+        mergePayload: @escaping (Data) -> Void,
+        getArchivePayload: @escaping () -> Data?
+    ) {
         self.getPayload = getPayload
         self.mergePayload = mergePayload
+        self.getArchivePayload = getArchivePayload
     }
 
     func start() {
@@ -337,11 +360,22 @@ final class FavoriteSyncServer {
     }
 
     private func respond(to request: Data, on connection: NWConnection) {
+        let path = requestPath(from: request)
+
+        if path == "/archive" {
+            sendResponse(getArchivePayload() ?? emptyArchivePayload(), on: connection)
+            return
+        }
+
         if let body = requestBody(from: request), !body.isEmpty {
             mergePayload(body)
         }
 
         let body = getPayload() ?? Data("{}".utf8)
+        sendResponse(body, on: connection)
+    }
+
+    private func sendResponse(_ body: Data, on connection: NWConnection) {
         let header = [
             "HTTP/1.1 200 OK",
             "Content-Type: application/json",
@@ -355,6 +389,21 @@ final class FavoriteSyncServer {
         connection.send(content: response, isComplete: true, completion: .contentProcessed { _ in
             connection.cancel()
         })
+    }
+
+    private func emptyArchivePayload() -> Data {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return (try? encoder.encode(ArchiveSyncPayload(generatedAt: Date(), items: []))) ?? Data(#"{"items":[]}"#.utf8)
+    }
+
+    private func requestPath(from data: Data) -> String {
+        guard let headerEnd = headerEndRange(in: data) else { return "/" }
+        let headers = String(decoding: data[..<headerEnd.lowerBound], as: UTF8.self)
+        let firstLine = headers.components(separatedBy: "\r\n").first ?? ""
+        let parts = firstLine.split(separator: " ")
+        guard parts.count >= 2 else { return "/" }
+        return String(parts[1]).components(separatedBy: "?").first ?? "/"
     }
 
     private func requestBody(from data: Data) -> Data? {
@@ -471,6 +520,9 @@ final class ClipboardStore: ObservableObject {
     private var contentSignatureCache: [String: [String]] = [:]
     private var lastFavoriteSyncRefresh = Date.distantPast
     private var favoriteSyncServer: FavoriteSyncServer?
+    private let archiveSyncLookback: TimeInterval = 3 * 24 * 60 * 60
+    private let archiveSyncMaxItems = 250
+    private let archiveSyncMaxBytes = 50 * 1024 * 1024
 
     private let folderFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -1293,6 +1345,43 @@ final class ClipboardStore: ObservableObject {
         return favoriteSyncStore.encodedRecords()
     }
 
+    private func archiveSyncPayload() -> Data? {
+        load()
+        let cutoff = Date().addingTimeInterval(-archiveSyncLookback)
+        var totalBytes = 0
+        var items: [ArchiveSyncItem] = []
+
+        for entry in entries where entry.createdAt >= cutoff {
+            guard items.count < archiveSyncMaxItems,
+                  let data = try? SecureStorage.shared.readData(from: entry.url),
+                  !data.isEmpty else { continue }
+
+            let richPreviewData = entry.richPreviewURL.flatMap { try? SecureStorage.shared.readData(from: $0) }
+            let itemBytes = data.count + (richPreviewData?.count ?? 0)
+            guard totalBytes + itemBytes <= archiveSyncMaxBytes else { break }
+
+            items.append(
+                ArchiveSyncItem(
+                    id: entry.id,
+                    kind: entry.kind,
+                    createdAt: entry.createdAt,
+                    preview: entry.preview,
+                    data: data,
+                    isFavorite: entry.isFavorite,
+                    displayKind: entry.displayKind,
+                    richPreviewData: richPreviewData,
+                    favoriteShortcut: entry.favoriteShortcut
+                )
+            )
+            totalBytes += itemBytes
+        }
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return try? encoder.encode(ArchiveSyncPayload(generatedAt: Date(), items: items))
+    }
+
     private func mergeFavoriteSyncPayload(_ data: Data) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -1305,7 +1394,8 @@ final class ClipboardStore: ObservableObject {
     private func startFavoriteSyncServer() {
         favoriteSyncServer = FavoriteSyncServer(
             getPayload: { [weak self] in self?.favoriteSyncPayload() },
-            mergePayload: { [weak self] data in self?.mergeFavoriteSyncPayload(data) }
+            mergePayload: { [weak self] data in self?.mergeFavoriteSyncPayload(data) },
+            getArchivePayload: { [weak self] in self?.archiveSyncPayload() }
         )
         favoriteSyncServer?.start()
     }

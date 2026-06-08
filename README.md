@@ -18,7 +18,7 @@ The current macOS app target is still named `ClipboardArchiv.app` internally. Th
 - Lets you mark entries as favorites.
 - Lets you assign favorite shortcuts from `Command+1` to `Command+9`.
 - Pastes a favorite into the active app with its shortcut.
-- Syncs favorite metadata between the Mac app and iOS app over the local network.
+- Syncs recent archive entries and favorite metadata between the Mac app and iOS app over the local network.
 - Copies any entry by clicking its row.
 - Lets you drag image entries out of the archive window.
 - Starts at the top of the list whenever the archive window opens.
@@ -75,7 +75,7 @@ Current iOS architecture:
 - `iOS/ClipboardKeyboard`: Custom Keyboard extension skeleton for inserting favorite text snippets.
 - `iOS/ClipboardShareExtension`: Share extension skeleton for saving text, URLs, and images from other apps.
 
-Favorite sync uses Bonjour on the local network. The Mac app advertises a small local service, and the iOS app exchanges only favorite metadata: content fingerprints, favorite state, and shortcuts. Clipboard text and image data are not sent by this sync channel.
+LAN sync uses Bonjour on the local network. The Mac app advertises a small local service, and the iOS app pulls recent archive entries while unlocked. Favorite metadata is also exchanged as content fingerprints, favorite state, and shortcuts.
 
 Build the shared core:
 
